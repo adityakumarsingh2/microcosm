@@ -1,0 +1,11 @@
+{
+    "name":  "microcosm",
+    "version":  "0.1.0",
+    "private":  true,
+    "description":  "Microcosm - AI-native Knowledge Operating System",
+    "scripts":  {
+                    "dev:client":  "npm run dev --prefix client",
+                    "dev:server":  "npm run dev --prefix server",
+                    "dev:ai":  "cd ai-service \u0026\u0026 .venv\\\\Scripts\\\\python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload"
+                }
+}
