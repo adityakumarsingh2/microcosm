@@ -1,0 +1,69 @@
+﻿import { AppError } from "../../shared/errors/app-error.js";
+import { isValidObjectId } from "../../shared/utils/object-id.js";
+import { sectionService } from "../sections/section.service.js";
+import { Page } from "./page.model.js";
+
+class PageService {
+  async list(userId, sectionId) {
+    await sectionService.getOwnedSection(userId, sectionId);
+    const pages = await Page.find({ sectionId, status: "active" }).sort({ updatedAt: -1 });
+    return pages.map((page) => page.toJSONView());
+  }
+
+  async create(userId, sectionId, payload) {
+    const section = await sectionService.getOwnedSection(userId, sectionId);
+    const page = await Page.create({
+      workspaceId: section.workspaceId,
+      notebookId: section.notebookId,
+      sectionId,
+      title: payload.title,
+      emoji: payload.emoji || "",
+      blocks: payload.blocks || [],
+      knowledgeStatus: payload.blocks?.length ? "pending" : "not_indexed",
+    });
+    return page.toJSONView();
+  }
+
+  async getOwnedPage(userId, pageId) {
+    if (!isValidObjectId(pageId)) {
+      throw new AppError("Page not found", 404, "PAGE_NOT_FOUND");
+    }
+
+    const page = await Page.findOne({ _id: pageId, status: "active" });
+
+    if (!page) {
+      throw new AppError("Page not found", 404, "PAGE_NOT_FOUND");
+    }
+
+    await sectionService.getOwnedSection(userId, page.sectionId);
+    return page;
+  }
+
+  async get(userId, pageId) {
+    const page = await this.getOwnedPage(userId, pageId);
+    return page.toJSONView();
+  }
+
+  async update(userId, pageId, payload) {
+    const page = await this.getOwnedPage(userId, pageId);
+
+    if (payload.title !== undefined) page.title = payload.title;
+    if (payload.emoji !== undefined) page.emoji = payload.emoji;
+    if (payload.blocks !== undefined) {
+      page.blocks = payload.blocks;
+      page.knowledgeStatus = payload.blocks.length ? "pending" : "not_indexed";
+    }
+
+    await page.save();
+    return page.toJSONView();
+  }
+
+  async archive(userId, pageId) {
+    const page = await this.getOwnedPage(userId, pageId);
+    page.status = "archived";
+    await page.save();
+    return page.toJSONView();
+  }
+}
+
+export const pageService = new PageService();

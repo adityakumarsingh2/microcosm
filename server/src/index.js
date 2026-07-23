@@ -1,8 +1,15 @@
-import "dotenv/config";
+﻿import "dotenv/config";
 import { app } from "./app.js";
+import { connectDatabase } from "./config/database.js";
+import { env } from "./config/env.js";
 
-const PORT = process.env.PORT || 5000;
-
-app.listen(PORT, () => {
-  console.log(`Microcosm API running on port ${PORT}`);
-});
+connectDatabase()
+  .then(() => {
+    app.listen(env.port, () => {
+      console.log(`Microcosm API running on port ${env.port}`);
+    });
+  })
+  .catch((error) => {
+    console.error("Failed to start Microcosm API", error);
+    process.exit(1);
+  });
