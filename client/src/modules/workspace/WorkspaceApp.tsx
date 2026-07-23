@@ -1,9 +1,11 @@
-﻿import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   BookOpen,
   Bot,
   ChevronDown,
   FileText,
+  Folder,
   Home,
   Image,
   Layers3,
@@ -15,23 +17,129 @@ import {
 } from "lucide-react";
 import { useAuth } from "../auth/AuthProvider";
 import { MicrocosmEditor } from "../editor/MicrocosmEditor";
+import {
+  createNotebook,
+  createPage,
+  createSection,
+  getPage,
+  listNotebooks,
+  listPages,
+  listSections,
+  updatePage,
+  type PageBlock,
+} from "./content.api";
 import { createWorkspace, listWorkspaces } from "./workspace.api";
 
-const fallbackNotebooks = [
-  { name: "Operating Systems", active: true },
-  { name: "DBMS", active: false },
-  { name: "Machine Learning", active: false },
+const starterBlocks: PageBlock[] = [
+  {
+    blockId: "block-1",
+    type: "heading",
+    content: "My first Microcosm page",
+    properties: { level: 1 },
+    position: 1000,
+  },
+  {
+    blockId: "block-2",
+    type: "paragraph",
+    content: "Write notes here. Later, the Knowledge Layer will turn these blocks into embeddings for RAG.",
+    properties: {},
+    position: 2000,
+  },
 ];
 
 export function WorkspaceApp() {
   const queryClient = useQueryClient();
   const { accessToken, logout, user } = useAuth();
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
+  const [activeNotebookId, setActiveNotebookId] = useState<string | null>(null);
+  const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
+  const [activePageId, setActivePageId] = useState<string | null>(null);
+  const [pageTitleDraft, setPageTitleDraft] = useState("");
 
   const workspacesQuery = useQuery({
     queryKey: ["workspaces"],
     queryFn: () => listWorkspaces(accessToken!),
     enabled: Boolean(accessToken),
   });
+
+  const workspaces = workspacesQuery.data?.data.workspaces || [];
+
+  useEffect(() => {
+    if (!activeWorkspaceId && workspaces[0]) {
+      setActiveWorkspaceId(workspaces[0].id);
+    }
+  }, [activeWorkspaceId, workspaces]);
+
+  const notebooksQuery = useQuery({
+    queryKey: ["notebooks", activeWorkspaceId],
+    queryFn: () => listNotebooks(accessToken!, activeWorkspaceId!),
+    enabled: Boolean(accessToken && activeWorkspaceId),
+  });
+
+  const notebooks = notebooksQuery.data?.data.notebooks || [];
+
+  useEffect(() => {
+    if (notebooks[0] && !notebooks.some((notebook) => notebook.id === activeNotebookId)) {
+      setActiveNotebookId(notebooks[0].id);
+    }
+    if (notebooks.length === 0) {
+      setActiveNotebookId(null);
+      setActiveSectionId(null);
+      setActivePageId(null);
+    }
+  }, [activeNotebookId, notebooks]);
+
+  const sectionsQuery = useQuery({
+    queryKey: ["sections", activeNotebookId],
+    queryFn: () => listSections(accessToken!, activeNotebookId!),
+    enabled: Boolean(accessToken && activeNotebookId),
+  });
+
+  const sections = sectionsQuery.data?.data.sections || [];
+
+  useEffect(() => {
+    if (sections[0] && !sections.some((section) => section.id === activeSectionId)) {
+      setActiveSectionId(sections[0].id);
+    }
+    if (sections.length === 0) {
+      setActiveSectionId(null);
+      setActivePageId(null);
+    }
+  }, [activeSectionId, sections]);
+
+  const pagesQuery = useQuery({
+    queryKey: ["pages", activeSectionId],
+    queryFn: () => listPages(accessToken!, activeSectionId!),
+    enabled: Boolean(accessToken && activeSectionId),
+  });
+
+  const pages = pagesQuery.data?.data.pages || [];
+
+  useEffect(() => {
+    if (pages[0] && !pages.some((page) => page.id === activePageId)) {
+      setActivePageId(pages[0].id);
+    }
+    if (pages.length === 0) {
+      setActivePageId(null);
+    }
+  }, [activePageId, pages]);
+
+  const pageQuery = useQuery({
+    queryKey: ["page", activePageId],
+    queryFn: () => getPage(accessToken!, activePageId!),
+    enabled: Boolean(accessToken && activePageId),
+  });
+
+  const activeWorkspace = workspaces.find((workspace) => workspace.id === activeWorkspaceId);
+  const activeNotebook = notebooks.find((notebook) => notebook.id === activeNotebookId);
+  const activeSection = sections.find((section) => section.id === activeSectionId);
+  const activePage = pageQuery.data?.data.page;
+
+  useEffect(() => {
+    if (activePage) {
+      setPageTitleDraft(activePage.title);
+    }
+  }, [activePage]);
 
   const createWorkspaceMutation = useMutation({
     mutationFn: () =>
@@ -40,13 +148,64 @@ export function WorkspaceApp() {
         description: "Your first Microcosm workspace",
         icon: "sparkles",
       }),
-    onSuccess: () => {
+    onSuccess: (result) => {
+      setActiveWorkspaceId(result.data.workspace.id);
       void queryClient.invalidateQueries({ queryKey: ["workspaces"] });
     },
   });
 
-  const workspaces = workspacesQuery.data?.data.workspaces || [];
-  const activeWorkspace = workspaces[0];
+  const createNotebookMutation = useMutation({
+    mutationFn: () =>
+      createNotebook(accessToken!, activeWorkspaceId!, {
+        title: "New Notebook",
+        description: "A focused space for connected notes",
+      }),
+    onSuccess: (result) => {
+      setActiveNotebookId(result.data.notebook.id);
+      void queryClient.invalidateQueries({ queryKey: ["notebooks", activeWorkspaceId] });
+    },
+  });
+
+  const createSectionMutation = useMutation({
+    mutationFn: () => createSection(accessToken!, activeNotebookId!, { title: "General" }),
+    onSuccess: (result) => {
+      setActiveSectionId(result.data.section.id);
+      void queryClient.invalidateQueries({ queryKey: ["sections", activeNotebookId] });
+    },
+  });
+
+  const createPageMutation = useMutation({
+    mutationFn: () =>
+      createPage(accessToken!, activeSectionId!, {
+        title: "Untitled Page",
+        emoji: "",
+        blocks: starterBlocks,
+      }),
+    onSuccess: (result) => {
+      setActivePageId(result.data.page.id);
+      void queryClient.invalidateQueries({ queryKey: ["pages", activeSectionId] });
+    },
+  });
+
+  const updatePageMutation = useMutation({
+    mutationFn: (input: { title?: string; blocks?: PageBlock[] }) => updatePage(accessToken!, activePageId!, input),
+    onSuccess: (result) => {
+      void queryClient.setQueryData(["page", activePageId], result);
+      void queryClient.invalidateQueries({ queryKey: ["pages", activeSectionId] });
+    },
+  });
+
+  const hierarchyState = useMemo(() => {
+    if (workspacesQuery.isLoading) return "Loading your workspace...";
+    if (workspaces.length === 0) return "Create a workspace to start writing.";
+    if (notebooksQuery.isLoading) return "Loading notebooks...";
+    if (notebooks.length === 0) return "Create your first notebook.";
+    if (sectionsQuery.isLoading) return "Loading sections...";
+    if (sections.length === 0) return "Create your first section.";
+    if (pagesQuery.isLoading) return "Loading pages...";
+    if (pages.length === 0) return "Create your first page.";
+    return "Select a page to write.";
+  }, [notebooks.length, notebooksQuery.isLoading, pages.length, pagesQuery.isLoading, sections.length, sectionsQuery.isLoading, workspaces.length, workspacesQuery.isLoading]);
 
   return (
     <main className="app-shell">
@@ -82,12 +241,9 @@ export function WorkspaceApp() {
           <div className="section-label">// workspaces</div>
 
           {workspacesQuery.isLoading ? <p className="sidebar-note">Loading workspaces...</p> : null}
+          {workspacesQuery.isError ? <p className="sidebar-note error-text">Unable to load workspaces.</p> : null}
 
-          {workspacesQuery.isError ? (
-            <p className="sidebar-note error-text">Unable to load workspaces.</p>
-          ) : null}
-
-          {!workspacesQuery.isLoading && workspaces.length === 0 ? (
+          {workspaces.length === 0 && !workspacesQuery.isLoading ? (
             <div className="empty-sidebar-state">
               <p>No workspaces yet.</p>
               <button onClick={() => createWorkspaceMutation.mutate()} disabled={createWorkspaceMutation.isPending}>
@@ -96,21 +252,96 @@ export function WorkspaceApp() {
             </div>
           ) : null}
 
-          {workspaces.map((workspace, index) => (
+          {workspaces.map((workspace) => (
             <div className="workspace-tree" key={workspace.id}>
-              <button className="tree-root">
+              <button
+                className={workspace.id === activeWorkspaceId ? "tree-root active" : "tree-root"}
+                onClick={() => {
+                  setActiveWorkspaceId(workspace.id);
+                  setActiveNotebookId(null);
+                  setActiveSectionId(null);
+                  setActivePageId(null);
+                }}
+              >
                 <ChevronDown size={15} />
                 {workspace.name}
               </button>
-              <div className="tree-children">
-                {(index === 0 ? fallbackNotebooks : []).map((child) => (
-                  <button className={child.active ? "tree-item active" : "tree-item"} key={child.name}>
-                    <BookOpen size={15} />
-                    {child.name}
+            </div>
+          ))}
+        </div>
+
+        <div className="sidebar-section hierarchy-section">
+          <div className="section-label">// notebooks</div>
+          {activeWorkspaceId ? (
+            <button
+              className="mini-create-button"
+              disabled={createNotebookMutation.isPending}
+              onClick={() => createNotebookMutation.mutate()}
+            >
+              <Plus size={14} /> Notebook
+            </button>
+          ) : null}
+
+          {notebooks.map((notebook) => (
+            <div className="workspace-tree" key={notebook.id}>
+              <button
+                className={notebook.id === activeNotebookId ? "tree-root active" : "tree-root"}
+                onClick={() => {
+                  setActiveNotebookId(notebook.id);
+                  setActiveSectionId(null);
+                  setActivePageId(null);
+                }}
+              >
+                <BookOpen size={15} />
+                {notebook.title}
+              </button>
+
+              {notebook.id === activeNotebookId ? (
+                <div className="tree-children">
+                  <button
+                    className="mini-create-button nested"
+                    disabled={createSectionMutation.isPending}
+                    onClick={() => createSectionMutation.mutate()}
+                  >
+                    <Plus size={14} /> Section
                   </button>
-                ))}
-                {index !== 0 ? <span className="tree-muted">No notebooks yet</span> : null}
-              </div>
+                  {sections.map((section) => (
+                    <div key={section.id}>
+                      <button
+                        className={section.id === activeSectionId ? "tree-item active" : "tree-item"}
+                        onClick={() => {
+                          setActiveSectionId(section.id);
+                          setActivePageId(null);
+                        }}
+                      >
+                        <Folder size={15} />
+                        {section.title}
+                      </button>
+                      {section.id === activeSectionId ? (
+                        <div className="tree-pages">
+                          <button
+                            className="mini-create-button nested"
+                            disabled={createPageMutation.isPending}
+                            onClick={() => createPageMutation.mutate()}
+                          >
+                            <Plus size={14} /> Page
+                          </button>
+                          {pages.map((page) => (
+                            <button
+                              className={page.id === activePageId ? "tree-page active" : "tree-page"}
+                              key={page.id}
+                              onClick={() => setActivePageId(page.id)}
+                            >
+                              <FileText size={14} />
+                              {page.title}
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              ) : null}
             </div>
           ))}
         </div>
@@ -153,11 +384,46 @@ export function WorkspaceApp() {
             <div className="page-meta">
               <span>{activeWorkspace?.name || "Workspace"}</span>
               <span>/</span>
-              <span>Operating Systems</span>
+              <span>{activeNotebook?.title || "Notebook"}</span>
               <span>/</span>
-              <strong>Deadlock Notes</strong>
+              <strong>{activePage?.title || "Page"}</strong>
             </div>
-            <MicrocosmEditor />
+
+            {activePage ? (
+              <>
+                <div className="page-title-row">
+                  <input
+                    value={pageTitleDraft}
+                    onChange={(event) => setPageTitleDraft(event.target.value)}
+                    onBlur={() => {
+                      if (pageTitleDraft.trim() && pageTitleDraft !== activePage.title) {
+                        updatePageMutation.mutate({ title: pageTitleDraft.trim() });
+                      }
+                    }}
+                    aria-label="Page title"
+                  />
+                  <span className={`knowledge-pill ${activePage.knowledgeStatus}`}>{activePage.knowledgeStatus}</span>
+                </div>
+                <MicrocosmEditor
+                  blocks={activePage.blocks}
+                  disabled={pageQuery.isLoading}
+                  isSaving={updatePageMutation.isPending}
+                  onSave={(blocks) => updatePageMutation.mutate({ blocks })}
+                />
+              </>
+            ) : (
+              <div className="editor-empty-state">
+                <Sparkles size={22} />
+                <h2>{hierarchyState}</h2>
+                <p>Microcosm needs a workspace, notebook, section, and page before the editor can save knowledge blocks.</p>
+                <div className="empty-actions">
+                  {workspaces.length === 0 ? <button onClick={() => createWorkspaceMutation.mutate()}>Create workspace</button> : null}
+                  {activeWorkspaceId && notebooks.length === 0 ? <button onClick={() => createNotebookMutation.mutate()}>Create notebook</button> : null}
+                  {activeNotebookId && sections.length === 0 ? <button onClick={() => createSectionMutation.mutate()}>Create section</button> : null}
+                  {activeSectionId && pages.length === 0 ? <button onClick={() => createPageMutation.mutate()}>Create page</button> : null}
+                </div>
+              </div>
+            )}
           </section>
 
           <aside className="companion-panel">
@@ -177,7 +443,7 @@ export function WorkspaceApp() {
                 Today's insight
               </div>
               <p>
-                Your notes connect <strong>Deadlock</strong> with resource allocation and process synchronization.
+                Your editor now saves real blocks. The next AI milestone will index these blocks into the Knowledge Layer.
               </p>
             </section>
 
@@ -185,15 +451,15 @@ export function WorkspaceApp() {
               <h2>Context</h2>
               <button>
                 <FileText size={16} />
-                Current page summary
+                {activePage ? activePage.title : "No page selected"}
               </button>
               <button>
                 <Layers3 size={16} />
-                Related notes
+                {activePage?.blocks.length || 0} saved blocks
               </button>
               <button>
                 <Image size={16} />
-                Image blocks
+                Image blocks coming next
               </button>
             </section>
           </aside>
