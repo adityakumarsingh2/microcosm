@@ -39,6 +39,74 @@ import { createWorkspace, listWorkspaces, updateWorkspace, deleteWorkspace } fro
 
 const emptyBlocks: PageBlock[] = [];
 
+const onboardingBlocks: PageBlock[] = [
+  {
+    blockId: "block-welcome-1",
+    type: "heading",
+    content: "Getting Started with Microcosm 🚀",
+    properties: { level: 1 },
+    position: 1000,
+  },
+  {
+    blockId: "block-welcome-2",
+    type: "paragraph",
+    content: "Welcome to your new knowledge base! Here's how to use the editor:",
+    properties: {},
+    position: 2000,
+  },
+  {
+    blockId: "block-welcome-3",
+    type: "paragraph",
+    content: "1. Type anything to start writing.",
+    properties: {},
+    position: 3000,
+  },
+  {
+    blockId: "block-welcome-4",
+    type: "paragraph",
+    content: "2. Highlight text to see the Bubble Menu for bold, italic, and code formatting.",
+    properties: {},
+    position: 4000,
+  },
+  {
+    blockId: "block-welcome-5",
+    type: "paragraph",
+    content: "3. Press Enter on an empty line to see the Floating Menu, where you can insert checklists, quotes, and headings.",
+    properties: {},
+    position: 5000,
+  },
+];
+
+function OnboardingOverlay({ onStart, isPending }: { onStart: (name: string) => void; isPending: boolean }) {
+  const [name, setName] = useState("My Knowledge");
+  return (
+    <div className="onboarding-overlay">
+      <div className="onboarding-card">
+        <div className="onboarding-icon">
+          <Sparkles size={32} />
+        </div>
+        <h2>Welcome to Microcosm</h2>
+        <p>Let's set up your first knowledge space. What would you like to call it?</p>
+        <input 
+          className="onboarding-input"
+          value={name} 
+          onChange={(e) => setName(e.target.value)} 
+          autoFocus 
+          onKeyDown={(e) => e.key === "Enter" && onStart(name)}
+          disabled={isPending}
+        />
+        <button 
+          className="onboarding-button primary-button" 
+          onClick={() => onStart(name)} 
+          disabled={isPending}
+        >
+          {isPending ? "Setting up..." : "Get Started"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function WorkspaceApp() {
   const queryClient = useQueryClient();
   const { accessToken, logout, user } = useAuth();
@@ -167,6 +235,43 @@ export function WorkspaceApp() {
     },
   });
 
+  const onboardingMutation = useMutation({
+    mutationFn: async (workspaceName: string) => {
+      const wsRes = await createWorkspace(accessToken!, {
+        name: workspaceName,
+        description: "Your primary workspace",
+        icon: "sparkles",
+      });
+      const wsId = wsRes.data.workspace.id;
+
+      const nbRes = await createNotebook(accessToken!, wsId, {
+        title: "Personal",
+      });
+      const nbId = nbRes.data.notebook.id;
+
+      const secRes = await createSection(accessToken!, nbId, {
+        title: "Home",
+      });
+      const secId = secRes.data.section.id;
+
+      const pgRes = await createPage(accessToken!, secId, {
+        title: "Getting Started 🚀",
+        emoji: "🚀",
+        blocks: onboardingBlocks,
+      });
+      const pgId = pgRes.data.page.id;
+
+      return { wsId, nbId, secId, pgId };
+    },
+    onSuccess: (ids) => {
+      void queryClient.invalidateQueries({ queryKey: ["workspaces"] });
+      setActiveWorkspaceId(ids.wsId);
+      setActiveNotebookId(ids.nbId);
+      setActiveSectionId(ids.secId);
+      setActivePageId(ids.pgId);
+    },
+  });
+
   const createNotebookMutation = useMutation({
     mutationFn: () =>
       createNotebook(accessToken!, activeWorkspaceId!, {
@@ -269,6 +374,15 @@ export function WorkspaceApp() {
     return "Select a page to write.";
   }, [notebooks.length, notebooksQuery.isLoading, pages.length, pagesQuery.isLoading, sections.length, sectionsQuery.isLoading, workspaces.length, workspacesQuery.isLoading]);
 
+  if (workspacesQuery.isSuccess && workspaces.length === 0) {
+    return (
+      <OnboardingOverlay 
+        onStart={(name) => onboardingMutation.mutate(name)} 
+        isPending={onboardingMutation.isPending} 
+      />
+    );
+  }
+
   return (
     <main className="app-shell">
       <aside className="sidebar">
@@ -300,90 +414,7 @@ export function WorkspaceApp() {
           </a>
         </nav>
 
-        <div className="sidebar-section spaces-section">
-          <div className="sidebar-section-head">
-            <span className="section-label">// spaces</span>
-            <button
-              className="sidebar-inline-action"
-              aria-label="Create space"
-              onClick={() => createWorkspaceMutation.mutate()}
-              disabled={createWorkspaceMutation.isPending}
-            >
-              <Plus size={13} />
-            </button>
-          </div>
 
-          {workspacesQuery.isLoading ? <p className="sidebar-note">Loading spaces...</p> : null}
-          {workspacesQuery.isError ? <p className="sidebar-note error-text">Unable to load spaces.</p> : null}
-
-          {workspaces.length === 0 && !workspacesQuery.isLoading ? (
-            <div className="empty-sidebar-state compact">
-              <p>No spaces yet.</p>
-              <button onClick={() => createWorkspaceMutation.mutate()} disabled={createWorkspaceMutation.isPending}>
-                Create space
-              </button>
-            </div>
-          ) : null}
-
-          <div className="space-list">
-            {workspaces.map((workspace) => (
-              <div
-                className={workspace.id === activeWorkspaceId ? "space-row active" : "space-row"}
-                key={workspace.id}
-              >
-                <button
-                  className="row-main-action"
-                  onClick={() => {
-                    setActiveWorkspaceId(workspace.id);
-                    setActiveNotebookId(null);
-                    setActiveSectionId(null);
-                    setActivePageId(null);
-                  }}
-                >
-                  <span className="space-dot" />
-                  {renamingItemId === workspace.id ? (
-                    <input
-                      autoFocus
-                      className="inline-rename-input"
-                      value={renameDraft}
-                      onChange={(e) => setRenameDraft(e.target.value)}
-                      onBlur={() => setRenamingItemId(null)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && renameDraft.trim()) {
-                          updateWorkspaceMutation.mutate({ name: renameDraft.trim() });
-                        }
-                        if (e.key === "Escape") setRenamingItemId(null);
-                      }}
-                    />
-                  ) : (
-                    <span>{workspace.name}</span>
-                  )}
-                </button>
-                <button
-                  className="inline-edit-action"
-                  aria-label="Edit workspace"
-                  title="Edit workspace"
-                  onClick={() => startRenaming(workspace.id, workspace.name)}
-                >
-                  <Edit2 size={13} />
-                </button>
-                <button
-                  className="inline-delete-action"
-                  aria-label="Delete workspace"
-                  title="Delete workspace"
-                  disabled={deleteWorkspaceMutation.isPending}
-                  onClick={() => {
-                    if (window.confirm("Are you sure you want to delete this space?")) {
-                      deleteWorkspaceMutation.mutate(workspace.id);
-                    }
-                  }}
-                >
-                  <Trash2 size={13} />
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
 
         <div className="sidebar-section hierarchy-section">
           <div className="sidebar-section-head">
