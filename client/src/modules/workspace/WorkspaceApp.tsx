@@ -36,6 +36,7 @@ import {
   type PageBlock,
 } from "./content.api";
 import { createWorkspace, listWorkspaces, updateWorkspace, deleteWorkspace } from "./workspace.api";
+import { chatWithCompanion } from "./companion.api";
 
 const emptyBlocks: PageBlock[] = [];
 
@@ -114,6 +115,29 @@ export function WorkspaceApp() {
   const [activeNotebookId, setActiveNotebookId] = useState<string | null>(null);
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
   const [activePageId, setActivePageId] = useState<string | null>(null);
+
+  const [chatHistory, setChatHistory] = useState<{ role: "user" | "ai"; content: string }[]>([]);
+  const [chatInput, setChatInput] = useState("");
+
+  const chatMutation = useMutation({
+    mutationFn: async (prompt: string) => {
+      const res = await chatWithCompanion(accessToken!, prompt);
+      return res.data.response;
+    },
+    onSuccess: (response) => {
+      setChatHistory((prev) => [...prev, { role: "ai", content: response }]);
+    },
+    onError: (err) => {
+      setChatHistory((prev) => [...prev, { role: "ai", content: `Error: ${err.message}` }]);
+    },
+  });
+
+  const handleSendChat = () => {
+    if (!chatInput.trim() || chatMutation.isPending) return;
+    setChatHistory((prev) => [...prev, { role: "user", content: chatInput }]);
+    chatMutation.mutate(chatInput);
+    setChatInput("");
+  };
   const [renamingItemId, setRenamingItemId] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
 
@@ -675,39 +699,43 @@ export function WorkspaceApp() {
           <aside className="companion-panel">
             <div className="companion-header">
               <span>// companion</span>
-              <span className="status-pill">ready</span>
+              <span className="status-pill">{chatMutation.isPending ? "thinking..." : "ready"}</span>
             </div>
 
             <div className="ask-box">
               <Bot size={18} />
-              <input placeholder="Ask from this space..." />
+              <input 
+                placeholder="Ask from this space..." 
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSendChat()}
+                disabled={chatMutation.isPending}
+              />
             </div>
 
-            <section className="insight-card">
-              <div className="card-kicker">
-                <Sparkles size={15} />
-                Today's insight
-              </div>
-              <p>
-                Your editor now saves real blocks. The next AI milestone will index these blocks into the Knowledge Layer.
-              </p>
-            </section>
-
-            <section className="companion-list">
-              <h2>Context</h2>
-              <button>
-                <FileText size={16} />
-                {activePage ? activePage.title : "No page selected"}
-              </button>
-              <button>
-                <Layers3 size={16} />
-                {activePage?.blocks.length || 0} saved blocks
-              </button>
-              <button>
-                <Image size={16} />
-                Image blocks coming next
-              </button>
-            </section>
+            <div className="chat-history" style={{ display: "flex", flexDirection: "column", gap: "12px", marginTop: "16px", overflowY: "auto", paddingBottom: "24px" }}>
+              {chatHistory.length === 0 && (
+                <section className="insight-card">
+                  <div className="card-kicker">
+                    <Sparkles size={15} />
+                    Try it out
+                  </div>
+                  <p>Ask a question and the AI will respond using the Python AI Service.</p>
+                </section>
+              )}
+              {chatHistory.map((msg, i) => (
+                <div key={i} className={`chat-message ${msg.role}`} style={{
+                  background: msg.role === "user" ? "rgba(255,255,255,0.05)" : "transparent",
+                  padding: msg.role === "user" ? "12px" : "4px",
+                  borderRadius: "8px",
+                  fontSize: "0.95rem",
+                  lineHeight: "1.5"
+                }}>
+                  {msg.role === "ai" && <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px", color: "var(--primary)", fontWeight: "500", fontSize: "0.85rem" }}><Sparkles size={13} /> Gemini</div>}
+                  {msg.content}
+                </div>
+              ))}
+            </div>
           </aside>
         </div>
       </section>
