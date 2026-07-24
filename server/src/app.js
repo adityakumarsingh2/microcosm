@@ -9,6 +9,7 @@ import { pageRouter } from "./modules/pages/page.route.js";
 import { sectionRouter } from "./modules/sections/section.route.js";
 import { notebookRouter } from "./modules/notebooks/notebook.route.js";
 import { workspaceRouter } from "./modules/workspaces/workspace.route.js";
+import { companionRouter } from "./modules/companion/companion.route.js";
 import { notFoundHandler } from "./shared/errors/not-found.handler.js";
 import { errorHandler } from "./shared/errors/error.handler.js";
 
@@ -31,10 +32,7 @@ app.use("/api/v1/workspaces", workspaceRouter);
 app.use("/api/v1", notebookRouter);
 app.use("/api/v1", sectionRouter);
 app.use("/api/v1", pageRouter);
+app.use("/api/v1", companionRouter);
 
 app.use(notFoundHandler);
 app.use(errorHandler);
-
-
-
-
