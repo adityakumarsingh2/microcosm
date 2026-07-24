@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import ReactMarkdown from "react-markdown";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   BookOpen,
   Bot,
@@ -696,45 +698,111 @@ export function WorkspaceApp() {
             )}
           </section>
 
-          <aside className="companion-panel">
-            <div className="companion-header">
-              <span>// companion</span>
-              <span className="status-pill">{chatMutation.isPending ? "thinking..." : "ready"}</span>
+          <aside className="neo-panel">
+            <div className="neo-header">
+              <span>// CHATBOT</span>
+              <span className="neo-status">
+                {chatMutation.isPending ? "GENERATING..." : "READY"}
+              </span>
             </div>
 
-            <div className="ask-box">
-              <Bot size={18} />
-              <input 
-                placeholder="Ask from this space..." 
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSendChat()}
-                disabled={chatMutation.isPending}
-              />
-            </div>
-
-            <div className="chat-history" style={{ display: "flex", flexDirection: "column", gap: "12px", marginTop: "16px", overflowY: "auto", paddingBottom: "24px" }}>
+            <div className="neo-chat-history">
               {chatHistory.length === 0 && (
-                <section className="insight-card">
-                  <div className="card-kicker">
-                    <Sparkles size={15} />
-                    Try it out
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <AnimatePresence>
+                    <motion.div
+                      className="neo-bubble ai"
+                      initial={{ opacity: 0, y: 12 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
+                    >
+                      <div className="neo-ai-label">
+                        <Bot size={14} /> AI Assistant
+                      </div>
+                      Hi! I'm your AI Assistant. Ask me anything about this workspace or the notes inside it!
+                    </motion.div>
+                  </AnimatePresence>
+                  
+                  <AnimatePresence>
+                    <motion.p
+                      className="neo-ai-label"
+                      style={{ color: '#666', marginTop: '8px' }}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ duration: 0.25, delay: 0.5 }}
+                    >
+                      <Sparkles size={12} /> SUGGESTED QUERIES:
+                    </motion.p>
+                  </AnimatePresence>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {["Summarize this notebook", "What is the key insight?", "Explain the recent notes"].map((sug, i) => (
+                      <AnimatePresence key={sug}>
+                        <motion.button
+                          onClick={() => {
+                            setChatInput(sug);
+                            setTimeout(() => document.getElementById('neo-input')?.focus(), 50);
+                          }}
+                          className="neo-chip"
+                          initial={{ opacity: 0, x: -12 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ duration: 0.3, delay: 0.6 + i * 0.15, ease: [0.22, 1, 0.36, 1] }}
+                        >
+                          <span style={{ color: 'blue', marginRight: '6px' }}>{">"}</span>
+                          {sug}
+                        </motion.button>
+                      </AnimatePresence>
+                    ))}
                   </div>
-                  <p>Ask a question and the AI will respond using the Python AI Service.</p>
-                </section>
-              )}
-              {chatHistory.map((msg, i) => (
-                <div key={i} className={`chat-message ${msg.role}`} style={{
-                  background: msg.role === "user" ? "rgba(255,255,255,0.05)" : "transparent",
-                  padding: msg.role === "user" ? "12px" : "4px",
-                  borderRadius: "8px",
-                  fontSize: "0.95rem",
-                  lineHeight: "1.5"
-                }}>
-                  {msg.role === "ai" && <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px", color: "var(--primary)", fontWeight: "500", fontSize: "0.85rem" }}><Sparkles size={13} /> Gemini</div>}
-                  {msg.content}
                 </div>
+              )}
+              
+              {chatHistory.map((msg, i) => (
+                <motion.div 
+                  key={i} 
+                  className={`neo-bubble ${msg.role}`}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                >
+                  {msg.role === "ai" && (
+                    <div className="neo-ai-label">
+                      <Bot size={14} /> AI Assistant
+                    </div>
+                  )}
+                  {msg.role === "user" ? (
+                    msg.content
+                  ) : (
+                    <ReactMarkdown className="markdown-prose">{msg.content}</ReactMarkdown>
+                  )}
+                </motion.div>
               ))}
+              
+              {chatMutation.isPending && (
+                <motion.div 
+                  className="neo-bubble ai"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                >
+                  <div className="neo-ai-label">
+                    <Bot size={14} /> AI Assistant
+                  </div>
+                  Generating response...
+                </motion.div>
+              )}
+            </div>
+
+            <div className="neo-input-wrap">
+              <div className="neo-input-box">
+                <span style={{ fontWeight: 'bold' }}>{">"}</span>
+                <input 
+                  id="neo-input"
+                  placeholder="Ask from this space..." 
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleSendChat()}
+                  disabled={chatMutation.isPending}
+                />
+              </div>
             </div>
           </aside>
         </div>
