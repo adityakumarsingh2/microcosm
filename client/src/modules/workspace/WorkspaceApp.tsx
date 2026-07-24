@@ -14,6 +14,8 @@ import {
   Search,
   Settings,
   Sparkles,
+  Edit2,
+  Trash2,
 } from "lucide-react";
 import { useAuth } from "../auth/AuthProvider";
 import { MicrocosmEditor } from "../editor/MicrocosmEditor";
@@ -26,26 +28,16 @@ import {
   listPages,
   listSections,
   updatePage,
+  updateNotebook,
+  deleteNotebook,
+  updateSection,
+  deleteSection,
+  deletePage,
   type PageBlock,
 } from "./content.api";
-import { createWorkspace, listWorkspaces } from "./workspace.api";
+import { createWorkspace, listWorkspaces, updateWorkspace, deleteWorkspace } from "./workspace.api";
 
-const starterBlocks: PageBlock[] = [
-  {
-    blockId: "block-1",
-    type: "heading",
-    content: "My first Microcosm page",
-    properties: { level: 1 },
-    position: 1000,
-  },
-  {
-    blockId: "block-2",
-    type: "paragraph",
-    content: "Write notes here. Later, the Knowledge Layer will turn these blocks into embeddings for RAG.",
-    properties: {},
-    position: 2000,
-  },
-];
+const emptyBlocks: PageBlock[] = [];
 
 export function WorkspaceApp() {
   const queryClient = useQueryClient();
@@ -54,7 +46,13 @@ export function WorkspaceApp() {
   const [activeNotebookId, setActiveNotebookId] = useState<string | null>(null);
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
   const [activePageId, setActivePageId] = useState<string | null>(null);
-  const [pageTitleDraft, setPageTitleDraft] = useState("");
+  const [renamingItemId, setRenamingItemId] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState("");
+
+  function startRenaming(id: string, currentTitle: string) {
+    setRenamingItemId(id);
+    setRenameDraft(currentTitle);
+  }
 
   const workspacesQuery = useQuery({
     queryKey: ["workspaces"],
@@ -135,12 +133,6 @@ export function WorkspaceApp() {
   const activeSection = sections.find((section) => section.id === activeSectionId);
   const activePage = pageQuery.data?.data.page;
 
-  useEffect(() => {
-    if (activePage) {
-      setPageTitleDraft(activePage.title);
-    }
-  }, [activePage]);
-
   const createWorkspaceMutation = useMutation({
     mutationFn: () =>
       createWorkspace(accessToken!, {
@@ -151,6 +143,27 @@ export function WorkspaceApp() {
     onSuccess: (result) => {
       setActiveWorkspaceId(result.data.workspace.id);
       void queryClient.invalidateQueries({ queryKey: ["workspaces"] });
+    },
+  });
+
+  const updateWorkspaceMutation = useMutation({
+    mutationFn: (input: { name: string }) => updateWorkspace(accessToken!, renamingItemId!, input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["workspaces"] });
+      setRenamingItemId(null);
+    },
+  });
+
+  const deleteWorkspaceMutation = useMutation({
+    mutationFn: (id: string) => deleteWorkspace(accessToken!, id),
+    onSuccess: (_, deletedId) => {
+      void queryClient.invalidateQueries({ queryKey: ["workspaces"] });
+      if (activeWorkspaceId === deletedId) {
+        setActiveWorkspaceId(null);
+        setActiveNotebookId(null);
+        setActiveSectionId(null);
+        setActivePageId(null);
+      }
     },
   });
 
@@ -166,11 +179,50 @@ export function WorkspaceApp() {
     },
   });
 
+  const updateNotebookMutation = useMutation({
+    mutationFn: (input: { title: string }) => updateNotebook(accessToken!, renamingItemId!, input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["notebooks", activeWorkspaceId] });
+      setRenamingItemId(null);
+    },
+  });
+
+  const deleteNotebookMutation = useMutation({
+    mutationFn: (id: string) => deleteNotebook(accessToken!, id),
+    onSuccess: (_, deletedId) => {
+      void queryClient.invalidateQueries({ queryKey: ["notebooks", activeWorkspaceId] });
+      if (activeNotebookId === deletedId) {
+        setActiveNotebookId(null);
+        setActiveSectionId(null);
+        setActivePageId(null);
+      }
+    },
+  });
+
   const createSectionMutation = useMutation({
-    mutationFn: () => createSection(accessToken!, activeNotebookId!, { title: "General" }),
+    mutationFn: () => createSection(accessToken!, activeNotebookId!, { title: "New Section" }),
     onSuccess: (result) => {
       setActiveSectionId(result.data.section.id);
       void queryClient.invalidateQueries({ queryKey: ["sections", activeNotebookId] });
+    },
+  });
+
+  const updateSectionMutation = useMutation({
+    mutationFn: (input: { title: string }) => updateSection(accessToken!, renamingItemId!, input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["sections", activeNotebookId] });
+      setRenamingItemId(null);
+    },
+  });
+
+  const deleteSectionMutation = useMutation({
+    mutationFn: (id: string) => deleteSection(accessToken!, id),
+    onSuccess: (_, deletedId) => {
+      void queryClient.invalidateQueries({ queryKey: ["sections", activeNotebookId] });
+      if (activeSectionId === deletedId) {
+        setActiveSectionId(null);
+        setActivePageId(null);
+      }
     },
   });
 
@@ -179,7 +231,7 @@ export function WorkspaceApp() {
       createPage(accessToken!, activeSectionId!, {
         title: "Untitled Page",
         emoji: "",
-        blocks: starterBlocks,
+        blocks: emptyBlocks,
       }),
     onSuccess: (result) => {
       setActivePageId(result.data.page.id);
@@ -195,13 +247,23 @@ export function WorkspaceApp() {
     },
   });
 
+  const deletePageMutation = useMutation({
+    mutationFn: (id: string) => deletePage(accessToken!, id),
+    onSuccess: (_, deletedId) => {
+      void queryClient.invalidateQueries({ queryKey: ["pages", activeSectionId] });
+      if (activePageId === deletedId) {
+        setActivePageId(null);
+      }
+    },
+  });
+
   const hierarchyState = useMemo(() => {
-    if (workspacesQuery.isLoading) return "Loading your workspace...";
-    if (workspaces.length === 0) return "Create a workspace to start writing.";
+    if (workspacesQuery.isLoading) return "Loading your space...";
+    if (workspaces.length === 0) return "Create a space to start writing.";
     if (notebooksQuery.isLoading) return "Loading notebooks...";
     if (notebooks.length === 0) return "Create your first notebook.";
-    if (sectionsQuery.isLoading) return "Loading sections...";
-    if (sections.length === 0) return "Create your first section.";
+    if (sectionsQuery.isLoading) return "Create a section inside this notebook.";
+    if (sections.length === 0) return "Create a section inside this notebook.";
     if (pagesQuery.isLoading) return "Loading pages...";
     if (pages.length === 0) return "Create your first page.";
     return "Select a page to write.";
@@ -213,141 +275,303 @@ export function WorkspaceApp() {
         <div className="brand-row">
           <span className="brand-mark">&lt;Microcosm /&gt;</span>
           <button
-            className="icon-button"
-            aria-label="Create workspace"
+            className="icon-button subtle"
+            aria-label="Create space"
+            title="Create space"
             onClick={() => createWorkspaceMutation.mutate()}
             disabled={createWorkspaceMutation.isPending}
           >
-            <Plus size={18} />
+            <Plus size={17} />
           </button>
         </div>
 
         <nav className="primary-nav" aria-label="Primary">
           <a className="nav-item active" href="#">
-            <Home size={17} />
-            Dashboard
+            <Home size={16} />
+            Home
           </a>
           <a className="nav-item" href="#">
-            <Search size={17} />
+            <Search size={16} />
             Search
           </a>
           <a className="nav-item" href="#">
-            <Bot size={17} />
+            <Bot size={16} />
             Companion
           </a>
         </nav>
 
-        <div className="sidebar-section">
-          <div className="section-label">// workspaces</div>
+        <div className="sidebar-section spaces-section">
+          <div className="sidebar-section-head">
+            <span className="section-label">// spaces</span>
+            <button
+              className="sidebar-inline-action"
+              aria-label="Create space"
+              onClick={() => createWorkspaceMutation.mutate()}
+              disabled={createWorkspaceMutation.isPending}
+            >
+              <Plus size={13} />
+            </button>
+          </div>
 
-          {workspacesQuery.isLoading ? <p className="sidebar-note">Loading workspaces...</p> : null}
-          {workspacesQuery.isError ? <p className="sidebar-note error-text">Unable to load workspaces.</p> : null}
+          {workspacesQuery.isLoading ? <p className="sidebar-note">Loading spaces...</p> : null}
+          {workspacesQuery.isError ? <p className="sidebar-note error-text">Unable to load spaces.</p> : null}
 
           {workspaces.length === 0 && !workspacesQuery.isLoading ? (
-            <div className="empty-sidebar-state">
-              <p>No workspaces yet.</p>
+            <div className="empty-sidebar-state compact">
+              <p>No spaces yet.</p>
               <button onClick={() => createWorkspaceMutation.mutate()} disabled={createWorkspaceMutation.isPending}>
-                Create starter workspace
+                Create space
               </button>
             </div>
           ) : null}
 
-          {workspaces.map((workspace) => (
-            <div className="workspace-tree" key={workspace.id}>
-              <button
-                className={workspace.id === activeWorkspaceId ? "tree-root active" : "tree-root"}
-                onClick={() => {
-                  setActiveWorkspaceId(workspace.id);
-                  setActiveNotebookId(null);
-                  setActiveSectionId(null);
-                  setActivePageId(null);
-                }}
+          <div className="space-list">
+            {workspaces.map((workspace) => (
+              <div
+                className={workspace.id === activeWorkspaceId ? "space-row active" : "space-row"}
+                key={workspace.id}
               >
-                <ChevronDown size={15} />
-                {workspace.name}
-              </button>
-            </div>
-          ))}
+                <button
+                  className="row-main-action"
+                  onClick={() => {
+                    setActiveWorkspaceId(workspace.id);
+                    setActiveNotebookId(null);
+                    setActiveSectionId(null);
+                    setActivePageId(null);
+                  }}
+                >
+                  <span className="space-dot" />
+                  {renamingItemId === workspace.id ? (
+                    <input
+                      autoFocus
+                      className="inline-rename-input"
+                      value={renameDraft}
+                      onChange={(e) => setRenameDraft(e.target.value)}
+                      onBlur={() => setRenamingItemId(null)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && renameDraft.trim()) {
+                          updateWorkspaceMutation.mutate({ name: renameDraft.trim() });
+                        }
+                        if (e.key === "Escape") setRenamingItemId(null);
+                      }}
+                    />
+                  ) : (
+                    <span>{workspace.name}</span>
+                  )}
+                </button>
+                <button
+                  className="inline-edit-action"
+                  aria-label="Edit workspace"
+                  title="Edit workspace"
+                  onClick={() => startRenaming(workspace.id, workspace.name)}
+                >
+                  <Edit2 size={13} />
+                </button>
+                <button
+                  className="inline-delete-action"
+                  aria-label="Delete workspace"
+                  title="Delete workspace"
+                  disabled={deleteWorkspaceMutation.isPending}
+                  onClick={() => {
+                    if (window.confirm("Are you sure you want to delete this space?")) {
+                      deleteWorkspaceMutation.mutate(workspace.id);
+                    }
+                  }}
+                >
+                  <Trash2 size={13} />
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
 
         <div className="sidebar-section hierarchy-section">
-          <div className="section-label">// notebooks</div>
-          {activeWorkspaceId ? (
-            <button
-              className="mini-create-button"
-              disabled={createNotebookMutation.isPending}
-              onClick={() => createNotebookMutation.mutate()}
-            >
-              <Plus size={14} /> Notebook
-            </button>
+          <div className="sidebar-section-head">
+            <span className="section-label">// library</span>
+            {activeWorkspaceId ? (
+              <button
+                className="sidebar-inline-action"
+                aria-label="Create notebook"
+                title="New notebook"
+                disabled={createNotebookMutation.isPending}
+                onClick={() => createNotebookMutation.mutate()}
+              >
+                <Plus size={13} />
+              </button>
+            ) : null}
+          </div>
+
+          {activeWorkspaceId && notebooks.length === 0 && !notebooksQuery.isLoading ? (
+            <div className="empty-sidebar-state compact">
+              <p>No notebooks in this space.</p>
+              <button onClick={() => createNotebookMutation.mutate()} disabled={createNotebookMutation.isPending}>
+                New notebook
+              </button>
+            </div>
           ) : null}
 
-          {notebooks.map((notebook) => (
-            <div className="workspace-tree" key={notebook.id}>
-              <button
-                className={notebook.id === activeNotebookId ? "tree-root active" : "tree-root"}
-                onClick={() => {
-                  setActiveNotebookId(notebook.id);
-                  setActiveSectionId(null);
-                  setActivePageId(null);
-                }}
-              >
-                <BookOpen size={15} />
-                {notebook.title}
-              </button>
-
-              {notebook.id === activeNotebookId ? (
-                <div className="tree-children">
+          <div className="library-tree">
+            {notebooks.map((notebook) => (
+              <div className="notebook-group" key={notebook.id}>
+                <div className={notebook.id === activeNotebookId ? "notebook-row active" : "notebook-row"}>
                   <button
-                    className="mini-create-button nested"
-                    disabled={createSectionMutation.isPending}
-                    onClick={() => createSectionMutation.mutate()}
+                    className="row-main-action"
+                    onClick={() => {
+                      setActiveNotebookId(notebook.id);
+                      setActiveSectionId(null);
+                      setActivePageId(null);
+                    }}
                   >
-                    <Plus size={14} /> Section
-                  </button>
-                  {sections.map((section) => (
-                    <div key={section.id}>
-                      <button
-                        className={section.id === activeSectionId ? "tree-item active" : "tree-item"}
-                        onClick={() => {
-                          setActiveSectionId(section.id);
-                          setActivePageId(null);
+                    <ChevronDown size={13} />
+                    <BookOpen size={14} />
+                    {renamingItemId === notebook.id ? (
+                      <input
+                        autoFocus
+                        className="inline-rename-input"
+                        value={renameDraft}
+                        onChange={(e) => setRenameDraft(e.target.value)}
+                        onBlur={() => setRenamingItemId(null)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && renameDraft.trim()) {
+                            updateNotebookMutation.mutate({ title: renameDraft.trim() });
+                          }
+                          if (e.key === "Escape") setRenamingItemId(null);
                         }}
-                      >
-                        <Folder size={15} />
-                        {section.title}
-                      </button>
-                      {section.id === activeSectionId ? (
-                        <div className="tree-pages">
-                          <button
-                            className="mini-create-button nested"
-                            disabled={createPageMutation.isPending}
-                            onClick={() => createPageMutation.mutate()}
-                          >
-                            <Plus size={14} /> Page
-                          </button>
-                          {pages.map((page) => (
-                            <button
-                              className={page.id === activePageId ? "tree-page active" : "tree-page"}
-                              key={page.id}
-                              onClick={() => setActivePageId(page.id)}
-                            >
-                              <FileText size={14} />
-                              {page.title}
-                            </button>
-                          ))}
-                        </div>
-                      ) : null}
-                    </div>
-                  ))}
+                      />
+                    ) : (
+                      <span>{notebook.title}</span>
+                    )}
+                  </button>
+                  <button
+                    className="inline-edit-action"
+                    title="Rename"
+                    onClick={() => startRenaming(notebook.id, notebook.title)}
+                  >
+                    <Edit2 size={13} />
+                  </button>
+                  <button
+                    className="inline-delete-action"
+                    title="Delete"
+                    disabled={deleteNotebookMutation.isPending}
+                    onClick={() => {
+                      if (window.confirm("Delete this notebook?")) deleteNotebookMutation.mutate(notebook.id);
+                    }}
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                  {notebook.id === activeNotebookId ? (
+                    <button
+                      className="inline-create-action"
+                      aria-label="New section"
+                      title="New section"
+                      disabled={createSectionMutation.isPending}
+                      onClick={() => createSectionMutation.mutate()}
+                    >
+                      <Plus size={13} />
+                    </button>
+                  ) : null}
                 </div>
-              ) : null}
-            </div>
-          ))}
+
+                {notebook.id === activeNotebookId ? (
+                  <div className="section-list">
+                    {sections.map((section) => (
+                      <div className="section-group" key={section.id}>
+                        <div className={section.id === activeSectionId ? "section-row active" : "section-row"}>
+                          <button
+                            className="row-main-action"
+                            onClick={() => {
+                              setActiveSectionId(section.id);
+                              setActivePageId(null);
+                            }}
+                          >
+                            <Folder size={13} />
+                            {renamingItemId === section.id ? (
+                              <input
+                                autoFocus
+                                className="inline-rename-input"
+                                value={renameDraft}
+                                onChange={(e) => setRenameDraft(e.target.value)}
+                                onBlur={() => setRenamingItemId(null)}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter" && renameDraft.trim()) {
+                                    updateSectionMutation.mutate({ title: renameDraft.trim() });
+                                  }
+                                  if (e.key === "Escape") setRenamingItemId(null);
+                                }}
+                              />
+                            ) : (
+                              <span>{section.title}</span>
+                            )}
+                          </button>
+                          <button
+                            className="inline-edit-action"
+                            title="Rename"
+                            onClick={() => startRenaming(section.id, section.title)}
+                          >
+                            <Edit2 size={13} />
+                          </button>
+                          <button
+                            className="inline-delete-action"
+                            title="Delete"
+                            disabled={deleteSectionMutation.isPending}
+                            onClick={() => {
+                              if (window.confirm("Delete this section?")) deleteSectionMutation.mutate(section.id);
+                            }}
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                          {section.id === activeSectionId ? (
+                            <button
+                              className="inline-create-action"
+                              aria-label="New page"
+                              title="New page"
+                              disabled={createPageMutation.isPending}
+                              onClick={() => createPageMutation.mutate()}
+                            >
+                              <Plus size={13} />
+                            </button>
+                          ) : null}
+                        </div>
+
+                        {section.id === activeSectionId ? (
+                          <div className="page-list">
+                            {pages.map((page) => (
+                              <div
+                                className={page.id === activePageId ? "page-row active" : "page-row"}
+                                key={page.id}
+                              >
+                                <button
+                                  className="row-main-action"
+                                  onClick={() => setActivePageId(page.id)}
+                                >
+                                  <FileText size={13} />
+                                  <span>{page.title}</span>
+                                </button>
+                                <button
+                                  className="inline-delete-action"
+                                  title="Delete"
+                                  disabled={deletePageMutation.isPending}
+                                  onClick={() => {
+                                    if (window.confirm("Delete this page?")) deletePageMutation.mutate(page.id);
+                                  }}
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ))}
+          </div>
         </div>
 
         <div className="sidebar-footer">
-          <div className="user-chip">
+          <div className="user-chip refined">
             <span>{user?.name?.slice(0, 1).toUpperCase() || "M"}</span>
             <div>
               <strong>{user?.name || "Microcosm User"}</strong>
@@ -355,11 +579,11 @@ export function WorkspaceApp() {
             </div>
           </div>
           <a className="nav-item" href="#">
-            <Settings size={17} />
+            <Settings size={16} />
             Settings
           </a>
           <button className="nav-item nav-button" onClick={() => void logout()}>
-            <LogOut size={17} />
+            <LogOut size={16} />
             Logout
           </button>
         </div>
@@ -382,7 +606,7 @@ export function WorkspaceApp() {
         <div className="content-grid">
           <section className="editor-panel">
             <div className="page-meta">
-              <span>{activeWorkspace?.name || "Workspace"}</span>
+              <span>{activeWorkspace?.name || "Space"}</span>
               <span>/</span>
               <span>{activeNotebook?.title || "Notebook"}</span>
               <span>/</span>
@@ -390,34 +614,24 @@ export function WorkspaceApp() {
             </div>
 
             {activePage ? (
-              <>
-                <div className="page-title-row">
-                  <input
-                    value={pageTitleDraft}
-                    onChange={(event) => setPageTitleDraft(event.target.value)}
-                    onBlur={() => {
-                      if (pageTitleDraft.trim() && pageTitleDraft !== activePage.title) {
-                        updatePageMutation.mutate({ title: pageTitleDraft.trim() });
-                      }
-                    }}
-                    aria-label="Page title"
-                  />
-                  <span className={`knowledge-pill ${activePage.knowledgeStatus}`}>{activePage.knowledgeStatus}</span>
-                </div>
-                <MicrocosmEditor
-                  blocks={activePage.blocks}
-                  disabled={pageQuery.isLoading}
-                  isSaving={updatePageMutation.isPending}
-                  onSave={(blocks) => updatePageMutation.mutate({ blocks })}
-                />
-              </>
+              <MicrocosmEditor
+                blocks={activePage.blocks}
+                disabled={pageQuery.isLoading}
+                isSaving={updatePageMutation.isPending}
+                knowledgeStatus={activePage.knowledgeStatus}
+                onSave={(blocks) => {
+                  const firstBlock = blocks.length > 0 ? blocks[0] : null;
+                  const newTitle = firstBlock && firstBlock.content ? firstBlock.content.trim() : "Untitled Page";
+                  updatePageMutation.mutate({ title: newTitle, blocks });
+                }}
+              />
             ) : (
               <div className="editor-empty-state">
                 <Sparkles size={22} />
                 <h2>{hierarchyState}</h2>
-                <p>Microcosm needs a workspace, notebook, section, and page before the editor can save knowledge blocks.</p>
+                <p>Microcosm needs a space, notebook, section, and page before the editor can save knowledge blocks.</p>
                 <div className="empty-actions">
-                  {workspaces.length === 0 ? <button onClick={() => createWorkspaceMutation.mutate()}>Create workspace</button> : null}
+                  {workspaces.length === 0 ? <button onClick={() => createWorkspaceMutation.mutate()}>Create space</button> : null}
                   {activeWorkspaceId && notebooks.length === 0 ? <button onClick={() => createNotebookMutation.mutate()}>Create notebook</button> : null}
                   {activeNotebookId && sections.length === 0 ? <button onClick={() => createSectionMutation.mutate()}>Create section</button> : null}
                   {activeSectionId && pages.length === 0 ? <button onClick={() => createPageMutation.mutate()}>Create page</button> : null}
@@ -434,7 +648,7 @@ export function WorkspaceApp() {
 
             <div className="ask-box">
               <Bot size={18} />
-              <input placeholder="Ask from this workspace..." />
+              <input placeholder="Ask from this space..." />
             </div>
 
             <section className="insight-card">

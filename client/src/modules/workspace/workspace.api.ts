@@ -1,4 +1,4 @@
-﻿import { apiRequest } from "../../shared/api/api-client";
+import { apiRequest } from "../../shared/api/api-client";
 
 export type Workspace = {
   id: string;
@@ -35,5 +35,20 @@ export function createWorkspace(token: string, input: { name: string; descriptio
     method: "POST",
     token,
     body: JSON.stringify(input),
+  });
+}
+
+export function updateWorkspace(token: string, workspaceId: string, input: { name?: string; description?: string; icon?: string }) {
+  return apiRequest<WorkspaceResponse>(`/workspaces/${workspaceId}`, {
+    method: "PATCH",
+    token,
+    body: JSON.stringify(input),
+  });
+}
+
+export function deleteWorkspace(token: string, workspaceId: string) {
+  return apiRequest<{ success: true }>(`/workspaces/${workspaceId}`, {
+    method: "DELETE",
+    token,
   });
 }

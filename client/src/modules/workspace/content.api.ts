@@ -86,6 +86,21 @@ export function createNotebook(token: string, workspaceId: string, input: { titl
   });
 }
 
+export function updateNotebook(token: string, notebookId: string, input: { title?: string; description?: string }) {
+  return apiRequest<NotebookResponse>(`/notebooks/${notebookId}`, {
+    method: "PATCH",
+    token,
+    body: JSON.stringify(input),
+  });
+}
+
+export function deleteNotebook(token: string, notebookId: string) {
+  return apiRequest<{ success: true }>(`/notebooks/${notebookId}`, {
+    method: "DELETE",
+    token,
+  });
+}
+
 export function listSections(token: string, notebookId: string) {
   return apiRequest<SectionListResponse>(`/notebooks/${notebookId}/sections`, { token });
 }
@@ -95,6 +110,21 @@ export function createSection(token: string, notebookId: string, input: { title:
     method: "POST",
     token,
     body: JSON.stringify(input),
+  });
+}
+
+export function updateSection(token: string, sectionId: string, input: { title?: string }) {
+  return apiRequest<SectionResponse>(`/sections/${sectionId}`, {
+    method: "PATCH",
+    token,
+    body: JSON.stringify(input),
+  });
+}
+
+export function deleteSection(token: string, sectionId: string) {
+  return apiRequest<{ success: true }>(`/sections/${sectionId}`, {
+    method: "DELETE",
+    token,
   });
 }
 
@@ -119,5 +149,12 @@ export function updatePage(token: string, pageId: string, input: { title?: strin
     method: "PATCH",
     token,
     body: JSON.stringify(input),
+  });
+}
+
+export function deletePage(token: string, pageId: string) {
+  return apiRequest<{ success: true }>(`/pages/${pageId}`, {
+    method: "DELETE",
+    token,
   });
 }
