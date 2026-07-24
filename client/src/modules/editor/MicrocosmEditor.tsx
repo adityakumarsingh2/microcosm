@@ -8,6 +8,8 @@ import { useEffect, useRef, useState } from "react";
 import { Bold, Italic, Code, Strikethrough, Heading1, Heading2, List, CheckSquare, Quote } from "lucide-react";
 import type { PageBlock } from "../workspace/content.api";
 import { BlockIdExtension } from "./BlockIdExtension";
+import { ImagePasteExtension } from "./ImagePasteExtension";
+import { SlashCommandExtension, getSuggestionItems, renderItems } from "./SlashCommandExtension";
 
 type RichNode = {
   type?: string;
@@ -195,7 +197,14 @@ export function MicrocosmEditor({ blocks, disabled, isSaving, onSave }: Microcos
         nested: true,
       }),
       Placeholder.configure({
-        placeholder: "Type to write, or select text to format...",
+        placeholder: "Type '/' for commands",
+      }),
+      ImagePasteExtension,
+      SlashCommandExtension.configure({
+        suggestion: {
+          items: getSuggestionItems,
+          render: renderItems,
+        },
       }),
     ],
     content: blocksToDocument(blocks),
@@ -225,7 +234,8 @@ export function MicrocosmEditor({ blocks, disabled, isSaving, onSave }: Microcos
     if (!editor) return;
     editor.commands.setContent(blocksToDocument(blocks), false);
     setSaveState("saved");
-  }, [blocks, editor]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editor]);
 
   useEffect(() => {
     if (!editor) return;

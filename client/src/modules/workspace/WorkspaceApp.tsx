@@ -78,7 +78,7 @@ const onboardingBlocks: PageBlock[] = [
 ];
 
 function OnboardingOverlay({ onStart, isPending }: { onStart: (name: string) => void; isPending: boolean }) {
-  const [name, setName] = useState("My Knowledge");
+  const [name, setName] = useState("Personal");
   return (
     <div className="onboarding-overlay">
       <div className="onboarding-card">
@@ -86,7 +86,7 @@ function OnboardingOverlay({ onStart, isPending }: { onStart: (name: string) => 
           <Sparkles size={32} />
         </div>
         <h2>Welcome to Microcosm</h2>
-        <p>Let's set up your first knowledge space. What would you like to call it?</p>
+        <p>Let's set up your first notebook. What would you like to call it?</p>
         <input 
           className="onboarding-input"
           value={name} 
@@ -236,16 +236,16 @@ export function WorkspaceApp() {
   });
 
   const onboardingMutation = useMutation({
-    mutationFn: async (workspaceName: string) => {
+    mutationFn: async (notebookName: string) => {
       const wsRes = await createWorkspace(accessToken!, {
-        name: workspaceName,
+        name: user?.name ? `${user.name}'s Knowledge` : "Primary Workspace",
         description: "Your primary workspace",
         icon: "sparkles",
       });
       const wsId = wsRes.data.workspace.id;
 
       const nbRes = await createNotebook(accessToken!, wsId, {
-        title: "Personal",
+        title: notebookName || "Personal",
       });
       const nbId = nbRes.data.notebook.id;
 
@@ -646,6 +646,7 @@ export function WorkspaceApp() {
 
             {activePage ? (
               <MicrocosmEditor
+                key={activePage.id}
                 blocks={activePage.blocks}
                 disabled={pageQuery.isLoading}
                 isSaving={updatePageMutation.isPending}

@@ -1351,3 +1351,53 @@ h1 span {
   justify-content: center;
   gap: 8px;
 }
+
+.slash-menu {
+  background: rgba(22, 22, 22, 0.95);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 200px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+
+.slash-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 0.95rem;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.1s ease;
+}
+
+.slash-menu-item:hover,
+.slash-menu-item.is-selected {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.slash-menu-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--dim);
+}
+
+.slash-menu-item:hover .slash-menu-icon,
+.slash-menu-item.is-selected .slash-menu-icon {
+  color: var(--text);
+}
