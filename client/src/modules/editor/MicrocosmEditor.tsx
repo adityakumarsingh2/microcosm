@@ -1,6 +1,5 @@
 import { useEditor, EditorContent, BubbleMenu, FloatingMenu } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import Image from "@tiptap/extension-image";
 import Placeholder from "@tiptap/extension-placeholder";
 import TaskItem from "@tiptap/extension-task-item";
 import TaskList from "@tiptap/extension-task-list";
@@ -9,6 +8,7 @@ import { Bold, Italic, Code, Strikethrough, Heading1, Heading2, List, CheckSquar
 import type { PageBlock } from "../workspace/content.api";
 import { BlockIdExtension } from "./BlockIdExtension";
 import { ImagePasteExtension } from "./ImagePasteExtension";
+import { ResizableImageExtension } from "./ResizableImageExtension";
 import { SlashCommandExtension, getSuggestionItems, renderItems } from "./SlashCommandExtension";
 
 type RichNode = {
@@ -191,7 +191,7 @@ export function MicrocosmEditor({ blocks, disabled, isSaving, onSave }: Microcos
     extensions: [
       StarterKit,
       BlockIdExtension,
-      Image,
+      ResizableImageExtension,
       TaskList,
       TaskItem.configure({
         nested: true,

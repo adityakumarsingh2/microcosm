@@ -305,7 +305,12 @@ h1 span {
 .microcosm-editor blockquote {
   color: #e5e5e5;
   font-size: 1.05rem;
-  line-height: 1.8;
+  line-height: 1.6;
+}
+
+.microcosm-editor p {
+  margin-top: 0.25em;
+  margin-bottom: 0.25em;
 }
 
 .microcosm-edito.prose blockquote {
@@ -373,8 +378,10 @@ h1 span {
     grid-template-columns: 1fr;
   }
 
-  .companion-panel {
+  .neo-panel {
     position: static;
+    height: auto;
+    min-height: 400px;
   }
 }
 
