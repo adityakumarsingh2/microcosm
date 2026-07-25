@@ -56,6 +56,10 @@ button {
 .sidebar {
   display: flex;
   flex-direction: column;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
   border-right: 1px solid var(--border);
   background: rgba(5, 5, 6, 0.86);
   backdrop-filter: blur(20px);
@@ -804,12 +808,26 @@ h1 span {
 }
 
 .sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
   background:
     linear-gradient(rgba(255, 255, 255, 0.018) 1px, transparent 1px),
     linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px),
     rgba(3, 3, 4, 0.92);
   background-size: 34px 34px;
   padding: 20px 14px;
+}
+
+.sidebar::-webkit-scrollbar {
+  width: 6px;
+}
+.sidebar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
 }
 
 .brand-row {
