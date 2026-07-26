@@ -39,6 +39,8 @@ import {
 } from "./content.api";
 import { createWorkspace, listWorkspaces, updateWorkspace, deleteWorkspace } from "./workspace.api";
 import { chatWithCompanion } from "./companion.api";
+import type { Source } from "./companion.api";
+import { CitationBadge } from "./CitationBadge";
 
 const emptyBlocks: PageBlock[] = [];
 
@@ -118,7 +120,12 @@ export function WorkspaceApp() {
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
   const [activePageId, setActivePageId] = useState<string | null>(null);
 
+<<<<<<< Updated upstream
   const [chatHistory, setChatHistory] = useState<{ role: "user" | "ai"; content: string }[]>([]);
+=======
+  // Companion state
+  const [chatHistory, setChatHistory] = useState<{ role: "user" | "ai"; content: string; sources?: Source[] }[]>([]);
+>>>>>>> Stashed changes
   const [chatInput, setChatInput] = useState("");
 
   const chatMutation = useMutation({
@@ -222,10 +229,52 @@ export function WorkspaceApp() {
     enabled: Boolean(accessToken && activePageId),
   });
 
+<<<<<<< Updated upstream
   const activeWorkspace = workspaces.find((workspace) => workspace.id === activeWorkspaceId);
   const activeNotebook = notebooks.find((notebook) => notebook.id === activeNotebookId);
   const activeSection = sections.find((section) => section.id === activeSectionId);
   const activePage = pageQuery.data?.data.page;
+=======
+  const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId);
+  const activeNotebook  = notebooks.find((n) => n.id === activeNotebookId);
+  const activeSection   = sections.find((s) => s.id === activeSectionId);
+  const activePage      = pageQuery.data?.data.page;
+
+  // ── Chat ──────────────────────────────────────────────────────────────────
+
+  const chatMutation = useMutation({
+    mutationFn: (prompt: string) =>
+      chatWithCompanion({
+        token: accessToken!,
+        prompt,
+        workspaceId: activeWorkspaceId ?? undefined,
+        scope: "workspace",
+      }).then((r) => r.data),
+    onSuccess: (data) => {
+      setChatHistory((prev) => [...prev, { role: "ai", content: data.response, sources: data.sources }]);
+    },
+    onError: (err) => {
+      setChatHistory((prev) => [
+        ...prev,
+        { role: "ai", content: `Something went wrong: ${err instanceof Error ? err.message : "unknown error"}`, sources: [] },
+      ]);
+    },
+  });
+
+  useEffect(() => {
+    chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chatHistory, chatMutation.isPending]);
+
+  function handleSendChat() {
+    const prompt = chatInput.trim();
+    if (!prompt || chatMutation.isPending) return;
+    setChatHistory((prev) => [...prev, { role: "user", content: prompt }]);
+    chatMutation.mutate(prompt);
+    setChatInput("");
+  }
+
+  // ── Mutations ─────────────────────────────────────────────────────────────
+>>>>>>> Stashed changes
 
   const createWorkspaceMutation = useMutation({
     mutationFn: () =>
@@ -756,12 +805,51 @@ export function WorkspaceApp() {
                   </div>
                 </div>
               )}
+<<<<<<< Updated upstream
               
               {chatHistory.map((msg, i) => (
                 <motion.div 
                   key={i} 
                   className={`neo-bubble ${msg.role}`}
                   initial={{ opacity: 0, y: 10 }}
+=======
+
+              <AnimatePresence initial={false}>
+                {chatHistory.map((msg, i) => (
+                  <motion.div
+                    key={i}
+                    className={`neo-bubble ${msg.role}`}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+                  >
+                    {msg.role === "ai" && (
+                      <div className="neo-ai-label"><Bot size={12} /> Assistant</div>
+                    )}
+                    {msg.role === "user" ? (
+                      msg.content
+                    ) : (
+                      <>
+                        <ReactMarkdown className="markdown-prose">{msg.content}</ReactMarkdown>
+                        {msg.sources && msg.sources.length > 0 && (
+                          <div className="citation-list">
+                            <span className="citation-list-label">Sources</span>
+                            {msg.sources.map((source, si) => (
+                              <CitationBadge key={source.pageId} source={source} index={si + 1} />
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+
+              {chatMutation.isPending && (
+                <motion.div
+                  className="neo-thinking"
+                  initial={{ opacity: 0, y: 6 }}
+>>>>>>> Stashed changes
                   animate={{ opacity: 1, y: 0 }}
                 >
                   {msg.role === "ai" && (
