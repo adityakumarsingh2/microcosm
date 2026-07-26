@@ -1,4 +1,4 @@
-﻿const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:5000/api/v1";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:5000/api/v1";
 
 type ApiOptions = RequestInit & {
   token?: string | null;
@@ -18,7 +18,7 @@ export class ApiError extends Error {
 export async function apiRequest<T>(path: string, options: ApiOptions = {}): Promise<T> {
   const headers = new Headers(options.headers);
 
-  if (!headers.has("content-type") && options.body) {
+  if (!headers.has("content-type") && options.body && !(options.body instanceof FormData)) {
     headers.set("content-type", "application/json");
   }
 

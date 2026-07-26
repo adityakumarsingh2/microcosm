@@ -1,5 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useState } from "react";
-import { Heading1, Heading2, List, CheckSquare, Quote } from "lucide-react";
+import { Heading1, Heading2, List, CheckSquare, Quote, Image as ImageIcon } from "lucide-react";
 
 export const SlashCommandMenu = forwardRef((props: any, ref) => {
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -47,6 +47,7 @@ export const SlashCommandMenu = forwardRef((props: any, ref) => {
       case "List": return <List size={14} />;
       case "CheckSquare": return <CheckSquare size={14} />;
       case "Quote": return <Quote size={14} />;
+      case "Image": return <ImageIcon size={14} />;
       default: return null;
     }
   };

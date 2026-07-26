@@ -10,6 +10,7 @@ import { BlockIdExtension } from "./BlockIdExtension";
 import { ImagePasteExtension } from "./ImagePasteExtension";
 import { ResizableImageExtension } from "./ResizableImageExtension";
 import { SlashCommandExtension, getSuggestionItems, renderItems } from "./SlashCommandExtension";
+import { uploadImageFile } from "../uploads/uploads.api";
 
 type RichNode = {
   type?: string;
@@ -93,6 +94,7 @@ function blocksToDocument(blocks: PageBlock[]) {
             attrs: {
               src: String(block.content || ""),
               alt: String(block.properties?.alt || ""),
+              width: block.properties?.width || "100%",
               blockId: block.blockId,
             },
           };
@@ -154,7 +156,7 @@ function documentToBlocks(document: RichNode, previousBlocks: PageBlock[]): Page
           blockId,
           type: "image",
           content: node.attrs?.src || "",
-          properties: { alt: node.attrs?.alt || "" },
+          properties: { alt: node.attrs?.alt || "", width: node.attrs?.width || "100%" },
           position,
         };
       }
@@ -177,7 +179,9 @@ export function MicrocosmEditor({ blocks, disabled, isSaving, onSave }: Microcos
   const blocksRef = useRef(blocks);
   const onSaveRef = useRef(onSave);
   const autosaveTimerRef = useRef<number | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [saveState, setSaveState] = useState<"saved" | "dirty" | "scheduled">("saved");
+  const [isUploading, setIsUploading] = useState(false);
 
   useEffect(() => {
     blocksRef.current = blocks;
@@ -267,16 +271,45 @@ export function MicrocosmEditor({ blocks, disabled, isSaving, onSave }: Microcos
     onSave(documentToBlocks(editor.getJSON() as RichNode, blocksRef.current));
   }
 
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !editor) return;
+
+    try {
+      setIsUploading(true);
+      const asset = await uploadImageFile(file);
+      editor.chain().focus().setImage({ src: asset.url, alt: file.name }).run();
+    } catch (err) {
+      console.error("Failed to upload image:", err);
+      alert("Failed to upload image. Please try again.");
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  };
+
   const saveLabel = isSaving ? "Saving" : saveState === "dirty" ? "Unsaved" : saveState === "scheduled" ? "Queued" : "Saved";
 
   return (
     <div className="editor-wrap">
+      <input
+        id="microcosm-image-upload-input"
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        style={{ display: "none" }}
+        onChange={handleImageUpload}
+      />
       <div className="editor-toolbar">
         <span>// page</span>
         <div className="toolbar-actions">
           <span className={`save-state ${saveState}`}>{saveLabel}</span>
           <button>Text</button>
-          <button>Image</button>
+          <button disabled={!editor || disabled || isSaving || isUploading} onClick={() => fileInputRef.current?.click()}>
+            {isUploading ? "Uploading..." : "Image"}
+          </button>
           <button>AI</button>
           <button disabled={!editor || disabled || isSaving} onClick={saveNow}>
             Save now
