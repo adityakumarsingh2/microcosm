@@ -5,10 +5,12 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   BookOpen,
   Bot,
-  ChevronRight,
+  ChevronDown,
   FileText,
   Folder,
   Home,
+  Image,
+  Layers3,
   LogOut,
   Plus,
   Search,
@@ -39,6 +41,8 @@ import {
 } from "./content.api";
 import { createWorkspace, listWorkspaces, updateWorkspace, deleteWorkspace } from "./workspace.api";
 import { chatWithCompanion } from "./companion.api";
+import type { Source } from "./companion.api";
+import { CitationBadge } from "./CitationBadge";
 
 const emptyBlocks: PageBlock[] = [];
 
@@ -131,7 +135,7 @@ export function WorkspaceApp() {
   const [renameDraft, setRenameDraft] = useState("");
 
   // Companion state
-  const [chatHistory, setChatHistory] = useState<{ role: "user" | "ai"; content: string }[]>([]);
+  const [chatHistory, setChatHistory] = useState<{ role: "user" | "ai"; content: string; sources?: Source[] }[]>([]);
   const [chatInput, setChatInput] = useState("");
   const chatBottomRef = useRef<HTMLDivElement>(null);
 
@@ -217,14 +221,19 @@ export function WorkspaceApp() {
 
   const chatMutation = useMutation({
     mutationFn: (prompt: string) =>
-      chatWithCompanion(accessToken!, prompt).then((r) => r.data.response),
-    onSuccess: (response) => {
-      setChatHistory((prev) => [...prev, { role: "ai", content: response }]);
+      chatWithCompanion({
+        token: accessToken!,
+        prompt,
+        workspaceId: activeWorkspaceId ?? undefined,
+        scope: "workspace",
+      }).then((r) => r.data),
+    onSuccess: (data) => {
+      setChatHistory((prev) => [...prev, { role: "ai", content: data.response, sources: data.sources }]);
     },
     onError: (err) => {
       setChatHistory((prev) => [
         ...prev,
-        { role: "ai", content: `Something went wrong: ${err instanceof Error ? err.message : "unknown error"}` },
+        { role: "ai", content: `Something went wrong: ${err instanceof Error ? err.message : "unknown error"}`, sources: [] },
       ]);
     },
   });
@@ -470,11 +479,11 @@ export function WorkspaceApp() {
                       setActivePageId(null);
                     }}
                   >
-                    <ChevronRight
+                    <ChevronDown
                       size={12}
                       style={{
                         transition: "transform 180ms ease",
-                        transform: notebook.id === activeNotebookId ? "rotate(90deg)" : "rotate(0deg)",
+                        transform: notebook.id === activeNotebookId ? "rotate(0deg)" : "rotate(-90deg)",
                         flexShrink: 0,
                       }}
                     />
@@ -630,11 +639,11 @@ export function WorkspaceApp() {
               <>
                 <div className="page-meta">
                   <span>{activeWorkspace?.name ?? "Space"}</span>
-                  <ChevronRight size={11} />
+                  <span className="page-meta-sep">›</span>
                   <span>{activeNotebook?.title ?? "Notebook"}</span>
-                  <ChevronRight size={11} />
+                  <span className="page-meta-sep">›</span>
                   <span>{activeSection?.title ?? "Section"}</span>
-                  <ChevronRight size={11} />
+                  <span className="page-meta-sep">›</span>
                   <strong>{activePage.title}</strong>
                 </div>
                 <MicrocosmEditor
@@ -753,7 +762,17 @@ export function WorkspaceApp() {
                     {msg.role === "user" ? (
                       msg.content
                     ) : (
-                      <ReactMarkdown className="markdown-prose">{msg.content}</ReactMarkdown>
+                      <>
+                        <ReactMarkdown className="markdown-prose">{msg.content}</ReactMarkdown>
+                        {msg.sources && msg.sources.length > 0 && (
+                          <div className="citation-list">
+                            <span className="citation-list-label">Sources</span>
+                            {msg.sources.map((source, si) => (
+                              <CitationBadge key={source.pageId} source={source} index={si + 1} />
+                            ))}
+                          </div>
+                        )}
+                      </>
                     )}
                   </motion.div>
                 ))}

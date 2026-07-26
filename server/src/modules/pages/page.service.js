@@ -1,7 +1,8 @@
-﻿import { AppError } from "../../shared/errors/app-error.js";
+import { AppError } from "../../shared/errors/app-error.js";
 import { isValidObjectId } from "../../shared/utils/object-id.js";
 import { sectionService } from "../sections/section.service.js";
 import { Page } from "./page.model.js";
+import { triggerIndexIfNeeded } from "../knowledge/knowledge.service.js";
 
 class PageService {
   async list(userId, sectionId) {
@@ -21,6 +22,12 @@ class PageService {
       blocks: payload.blocks || [],
       knowledgeStatus: payload.blocks?.length ? "pending" : "not_indexed",
     });
+
+    // Fire-and-forget indexing (does not block the API response)
+    triggerIndexIfNeeded(page).catch((err) =>
+      console.error("[PageService] Background indexing error:", err)
+    );
+
     return page.toJSONView();
   }
 
@@ -55,6 +62,12 @@ class PageService {
     }
 
     await page.save();
+
+    // Fire-and-forget indexing (does not block the API response)
+    triggerIndexIfNeeded(page).catch((err) =>
+      console.error("[PageService] Background indexing error:", err)
+    );
+
     return page.toJSONView();
   }
 
