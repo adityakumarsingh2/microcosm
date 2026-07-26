@@ -41,6 +41,17 @@ export const getSuggestionItems = ({ query }: { query: string }) => {
         editor.chain().focus().deleteRange(range).setBlockquote().run();
       },
     },
+    {
+      title: "Image",
+      icon: "Image",
+      command: ({ editor, range }: any) => {
+        editor.chain().focus().deleteRange(range).run();
+        const fileInput = document.getElementById("microcosm-image-upload-input") as HTMLInputElement;
+        if (fileInput) {
+          fileInput.click();
+        }
+      },
+    },
   ].filter((item) => item.title.toLowerCase().startsWith(query.toLowerCase()));
 };
 

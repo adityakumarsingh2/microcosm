@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import ReactMarkdown from "react-markdown";
 import { motion, AnimatePresence } from "framer-motion";
@@ -14,10 +14,12 @@ import {
   LogOut,
   Plus,
   Search,
+  SendHorizontal,
   Settings,
   Sparkles,
   Edit2,
   Trash2,
+  Zap,
 } from "lucide-react";
 import { useAuth } from "../auth/AuthProvider";
 import { MicrocosmEditor } from "../editor/MicrocosmEditor";
@@ -48,35 +50,35 @@ const onboardingBlocks: PageBlock[] = [
   {
     blockId: "block-welcome-1",
     type: "heading",
-    content: "Getting Started with Microcosm 🚀",
+    content: "Getting Started with Microcosm",
     properties: { level: 1 },
     position: 1000,
   },
   {
     blockId: "block-welcome-2",
     type: "paragraph",
-    content: "Welcome to your new knowledge base! Here's how to use the editor:",
+    content: "Welcome to your new knowledge base. Here's how to use the editor:",
     properties: {},
     position: 2000,
   },
   {
     blockId: "block-welcome-3",
     type: "paragraph",
-    content: "1. Type anything to start writing.",
+    content: "Type '/' on any empty line to open the command menu — insert headings, quotes, code blocks, checklists, and images.",
     properties: {},
     position: 3000,
   },
   {
     blockId: "block-welcome-4",
     type: "paragraph",
-    content: "2. Highlight text to see the Bubble Menu for bold, italic, and code formatting.",
+    content: "Select any text to reveal the bubble menu for bold, italic, strikethrough, and inline code formatting.",
     properties: {},
     position: 4000,
   },
   {
     blockId: "block-welcome-5",
     type: "paragraph",
-    content: "3. Press Enter on an empty line to see the Floating Menu, where you can insert checklists, quotes, and headings.",
+    content: "Your notes auto-save as you write. Ask the AI Companion anything about your notes from the panel on the right.",
     properties: {},
     position: 5000,
   },
@@ -88,24 +90,34 @@ function OnboardingOverlay({ onStart, isPending }: { onStart: (name: string) => 
     <div className="onboarding-overlay">
       <div className="onboarding-card">
         <div className="onboarding-icon">
-          <Sparkles size={32} />
+          <Sparkles size={26} />
         </div>
         <h2>Welcome to Microcosm</h2>
-        <p>Let's set up your first notebook. What would you like to call it?</p>
-        <input 
+        <p>Let's set up your first notebook. What area of knowledge will you start with?</p>
+        <input
           className="onboarding-input"
-          value={name} 
-          onChange={(e) => setName(e.target.value)} 
-          autoFocus 
-          onKeyDown={(e) => e.key === "Enter" && onStart(name)}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          autoFocus
+          onKeyDown={(e) => e.key === "Enter" && !isPending && onStart(name)}
           disabled={isPending}
+          placeholder="e.g. Personal, Engineering, Research…"
         />
-        <button 
-          className="onboarding-button primary-button" 
-          onClick={() => onStart(name)} 
+        <button
+          className="primary-button onboarding-button"
+          onClick={() => onStart(name)}
           disabled={isPending}
         >
-          {isPending ? "Setting up..." : "Get Started"}
+          {isPending ? (
+            <>
+              <span>Setting up...</span>
+            </>
+          ) : (
+            <>
+              <Sparkles size={15} />
+              <span>Get Started</span>
+            </>
+          )}
         </button>
       </div>
     </div>
@@ -119,41 +131,20 @@ export function WorkspaceApp() {
   const [activeNotebookId, setActiveNotebookId] = useState<string | null>(null);
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
   const [activePageId, setActivePageId] = useState<string | null>(null);
-
-<<<<<<< Updated upstream
-  const [chatHistory, setChatHistory] = useState<{ role: "user" | "ai"; content: string }[]>([]);
-=======
-  // Companion state
-  const [chatHistory, setChatHistory] = useState<{ role: "user" | "ai"; content: string; sources?: Source[] }[]>([]);
->>>>>>> Stashed changes
-  const [chatInput, setChatInput] = useState("");
-
-  const chatMutation = useMutation({
-    mutationFn: async (prompt: string) => {
-      const res = await chatWithCompanion(accessToken!, prompt);
-      return res.data.response;
-    },
-    onSuccess: (response) => {
-      setChatHistory((prev) => [...prev, { role: "ai", content: response }]);
-    },
-    onError: (err) => {
-      setChatHistory((prev) => [...prev, { role: "ai", content: `Error: ${err.message}` }]);
-    },
-  });
-
-  const handleSendChat = () => {
-    if (!chatInput.trim() || chatMutation.isPending) return;
-    setChatHistory((prev) => [...prev, { role: "user", content: chatInput }]);
-    chatMutation.mutate(chatInput);
-    setChatInput("");
-  };
   const [renamingItemId, setRenamingItemId] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
+
+  // Companion state
+  const [chatHistory, setChatHistory] = useState<{ role: "user" | "ai"; content: string; sources?: Source[] }[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const chatBottomRef = useRef<HTMLDivElement>(null);
 
   function startRenaming(id: string, currentTitle: string) {
     setRenamingItemId(id);
     setRenameDraft(currentTitle);
   }
+
+  // ── Queries ────────────────────────────────────────────────────────────────
 
   const workspacesQuery = useQuery({
     queryKey: ["workspaces"],
@@ -161,12 +152,10 @@ export function WorkspaceApp() {
     enabled: Boolean(accessToken),
   });
 
-  const workspaces = workspacesQuery.data?.data.workspaces || [];
+  const workspaces = workspacesQuery.data?.data.workspaces ?? [];
 
   useEffect(() => {
-    if (!activeWorkspaceId && workspaces[0]) {
-      setActiveWorkspaceId(workspaces[0].id);
-    }
+    if (!activeWorkspaceId && workspaces[0]) setActiveWorkspaceId(workspaces[0].id);
   }, [activeWorkspaceId, workspaces]);
 
   const notebooksQuery = useQuery({
@@ -175,12 +164,11 @@ export function WorkspaceApp() {
     enabled: Boolean(accessToken && activeWorkspaceId),
   });
 
-  const notebooks = notebooksQuery.data?.data.notebooks || [];
+  const notebooks = notebooksQuery.data?.data.notebooks ?? [];
 
   useEffect(() => {
-    if (notebooks[0] && !notebooks.some((notebook) => notebook.id === activeNotebookId)) {
+    if (notebooks[0] && !notebooks.some((n) => n.id === activeNotebookId))
       setActiveNotebookId(notebooks[0].id);
-    }
     if (notebooks.length === 0) {
       setActiveNotebookId(null);
       setActiveSectionId(null);
@@ -194,12 +182,11 @@ export function WorkspaceApp() {
     enabled: Boolean(accessToken && activeNotebookId),
   });
 
-  const sections = sectionsQuery.data?.data.sections || [];
+  const sections = sectionsQuery.data?.data.sections ?? [];
 
   useEffect(() => {
-    if (sections[0] && !sections.some((section) => section.id === activeSectionId)) {
+    if (sections[0] && !sections.some((s) => s.id === activeSectionId))
       setActiveSectionId(sections[0].id);
-    }
     if (sections.length === 0) {
       setActiveSectionId(null);
       setActivePageId(null);
@@ -212,15 +199,11 @@ export function WorkspaceApp() {
     enabled: Boolean(accessToken && activeSectionId),
   });
 
-  const pages = pagesQuery.data?.data.pages || [];
+  const pages = pagesQuery.data?.data.pages ?? [];
 
   useEffect(() => {
-    if (pages[0] && !pages.some((page) => page.id === activePageId)) {
-      setActivePageId(pages[0].id);
-    }
-    if (pages.length === 0) {
-      setActivePageId(null);
-    }
+    if (pages[0] && !pages.some((p) => p.id === activePageId)) setActivePageId(pages[0].id);
+    if (pages.length === 0) setActivePageId(null);
   }, [activePageId, pages]);
 
   const pageQuery = useQuery({
@@ -229,12 +212,6 @@ export function WorkspaceApp() {
     enabled: Boolean(accessToken && activePageId),
   });
 
-<<<<<<< Updated upstream
-  const activeWorkspace = workspaces.find((workspace) => workspace.id === activeWorkspaceId);
-  const activeNotebook = notebooks.find((notebook) => notebook.id === activeNotebookId);
-  const activeSection = sections.find((section) => section.id === activeSectionId);
-  const activePage = pageQuery.data?.data.page;
-=======
   const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId);
   const activeNotebook  = notebooks.find((n) => n.id === activeNotebookId);
   const activeSection   = sections.find((s) => s.id === activeSectionId);
@@ -274,15 +251,10 @@ export function WorkspaceApp() {
   }
 
   // ── Mutations ─────────────────────────────────────────────────────────────
->>>>>>> Stashed changes
 
   const createWorkspaceMutation = useMutation({
     mutationFn: () =>
-      createWorkspace(accessToken!, {
-        name: "My Knowledge",
-        description: "Your first Microcosm workspace",
-        icon: "sparkles",
-      }),
+      createWorkspace(accessToken!, { name: "My Knowledge", description: "Your first Microcosm workspace", icon: "sparkles" }),
     onSuccess: (result) => {
       setActiveWorkspaceId(result.data.workspace.id);
       void queryClient.invalidateQueries({ queryKey: ["workspaces"] });
@@ -302,57 +274,37 @@ export function WorkspaceApp() {
     onSuccess: (_, deletedId) => {
       void queryClient.invalidateQueries({ queryKey: ["workspaces"] });
       if (activeWorkspaceId === deletedId) {
-        setActiveWorkspaceId(null);
-        setActiveNotebookId(null);
-        setActiveSectionId(null);
-        setActivePageId(null);
+        setActiveWorkspaceId(null); setActiveNotebookId(null);
+        setActiveSectionId(null);   setActivePageId(null);
       }
     },
   });
 
   const onboardingMutation = useMutation({
     mutationFn: async (notebookName: string) => {
-      const wsRes = await createWorkspace(accessToken!, {
+      const wsRes  = await createWorkspace(accessToken!, {
         name: user?.name ? `${user.name}'s Knowledge` : "Primary Workspace",
-        description: "Your primary workspace",
-        icon: "sparkles",
+        description: "Your primary workspace", icon: "sparkles",
       });
-      const wsId = wsRes.data.workspace.id;
-
-      const nbRes = await createNotebook(accessToken!, wsId, {
-        title: notebookName || "Personal",
+      const wsId   = wsRes.data.workspace.id;
+      const nbRes  = await createNotebook(accessToken!, wsId, { title: notebookName || "Personal" });
+      const nbId   = nbRes.data.notebook.id;
+      const secRes = await createSection(accessToken!, nbId, { title: "Home" });
+      const secId  = secRes.data.section.id;
+      const pgRes  = await createPage(accessToken!, secId, {
+        title: "Getting Started", emoji: "🚀", blocks: onboardingBlocks,
       });
-      const nbId = nbRes.data.notebook.id;
-
-      const secRes = await createSection(accessToken!, nbId, {
-        title: "Home",
-      });
-      const secId = secRes.data.section.id;
-
-      const pgRes = await createPage(accessToken!, secId, {
-        title: "Getting Started 🚀",
-        emoji: "🚀",
-        blocks: onboardingBlocks,
-      });
-      const pgId = pgRes.data.page.id;
-
-      return { wsId, nbId, secId, pgId };
+      return { wsId, nbId, secId, pgId: pgRes.data.page.id };
     },
     onSuccess: (ids) => {
       void queryClient.invalidateQueries({ queryKey: ["workspaces"] });
-      setActiveWorkspaceId(ids.wsId);
-      setActiveNotebookId(ids.nbId);
-      setActiveSectionId(ids.secId);
-      setActivePageId(ids.pgId);
+      setActiveWorkspaceId(ids.wsId); setActiveNotebookId(ids.nbId);
+      setActiveSectionId(ids.secId);  setActivePageId(ids.pgId);
     },
   });
 
   const createNotebookMutation = useMutation({
-    mutationFn: () =>
-      createNotebook(accessToken!, activeWorkspaceId!, {
-        title: "New Notebook",
-        description: "A focused space for connected notes",
-      }),
+    mutationFn: () => createNotebook(accessToken!, activeWorkspaceId!, { title: "New Notebook" }),
     onSuccess: (result) => {
       setActiveNotebookId(result.data.notebook.id);
       void queryClient.invalidateQueries({ queryKey: ["notebooks", activeWorkspaceId] });
@@ -372,9 +324,7 @@ export function WorkspaceApp() {
     onSuccess: (_, deletedId) => {
       void queryClient.invalidateQueries({ queryKey: ["notebooks", activeWorkspaceId] });
       if (activeNotebookId === deletedId) {
-        setActiveNotebookId(null);
-        setActiveSectionId(null);
-        setActivePageId(null);
+        setActiveNotebookId(null); setActiveSectionId(null); setActivePageId(null);
       }
     },
   });
@@ -399,20 +349,13 @@ export function WorkspaceApp() {
     mutationFn: (id: string) => deleteSection(accessToken!, id),
     onSuccess: (_, deletedId) => {
       void queryClient.invalidateQueries({ queryKey: ["sections", activeNotebookId] });
-      if (activeSectionId === deletedId) {
-        setActiveSectionId(null);
-        setActivePageId(null);
-      }
+      if (activeSectionId === deletedId) { setActiveSectionId(null); setActivePageId(null); }
     },
   });
 
   const createPageMutation = useMutation({
     mutationFn: () =>
-      createPage(accessToken!, activeSectionId!, {
-        title: "Untitled Page",
-        emoji: "",
-        blocks: emptyBlocks,
-      }),
+      createPage(accessToken!, activeSectionId!, { title: "Untitled Page", emoji: "", blocks: emptyBlocks }),
     onSuccess: (result) => {
       setActivePageId(result.data.page.id);
       void queryClient.invalidateQueries({ queryKey: ["pages", activeSectionId] });
@@ -420,7 +363,8 @@ export function WorkspaceApp() {
   });
 
   const updatePageMutation = useMutation({
-    mutationFn: (input: { title?: string; blocks?: PageBlock[] }) => updatePage(accessToken!, activePageId!, input),
+    mutationFn: (input: { title?: string; blocks?: PageBlock[] }) =>
+      updatePage(accessToken!, activePageId!, input),
     onSuccess: (result) => {
       void queryClient.setQueryData(["page", activePageId], result);
       void queryClient.invalidateQueries({ queryKey: ["pages", activeSectionId] });
@@ -431,95 +375,102 @@ export function WorkspaceApp() {
     mutationFn: (id: string) => deletePage(accessToken!, id),
     onSuccess: (_, deletedId) => {
       void queryClient.invalidateQueries({ queryKey: ["pages", activeSectionId] });
-      if (activePageId === deletedId) {
-        setActivePageId(null);
-      }
+      if (activePageId === deletedId) setActivePageId(null);
     },
   });
 
+  // ── Derived state ─────────────────────────────────────────────────────────
+
   const hierarchyState = useMemo(() => {
-    if (workspacesQuery.isLoading) return "Loading your space...";
+    if (workspacesQuery.isLoading) return "Loading your space…";
     if (workspaces.length === 0) return "Create a space to start writing.";
-    if (notebooksQuery.isLoading) return "Loading notebooks...";
+    if (notebooksQuery.isLoading) return "Loading notebooks…";
     if (notebooks.length === 0) return "Create your first notebook.";
-    if (sectionsQuery.isLoading) return "Create a section inside this notebook.";
-    if (sections.length === 0) return "Create a section inside this notebook.";
-    if (pagesQuery.isLoading) return "Loading pages...";
+    if (sectionsQuery.isLoading || sections.length === 0) return "Create a section inside this notebook.";
+    if (pagesQuery.isLoading) return "Loading pages…";
     if (pages.length === 0) return "Create your first page.";
-    return "Select a page to write.";
-  }, [notebooks.length, notebooksQuery.isLoading, pages.length, pagesQuery.isLoading, sections.length, sectionsQuery.isLoading, workspaces.length, workspacesQuery.isLoading]);
+    return "Select a page to start writing.";
+  }, [notebooks.length, notebooksQuery.isLoading, pages.length, pagesQuery.isLoading,
+      sections.length, sectionsQuery.isLoading, workspaces.length, workspacesQuery.isLoading]);
+
+  // ── Onboarding gate ───────────────────────────────────────────────────────
 
   if (workspacesQuery.isSuccess && workspaces.length === 0) {
     return (
-      <OnboardingOverlay 
-        onStart={(name) => onboardingMutation.mutate(name)} 
-        isPending={onboardingMutation.isPending} 
+      <OnboardingOverlay
+        onStart={(name) => onboardingMutation.mutate(name)}
+        isPending={onboardingMutation.isPending}
       />
     );
   }
 
+  // ── Render ────────────────────────────────────────────────────────────────
+
   return (
     <main className="app-shell">
+
+      {/* ── SIDEBAR ─────────────────────────────────────────────────────── */}
       <aside className="sidebar">
+
+        {/* Brand */}
         <div className="brand-row">
           <span className="brand-mark">&lt;Microcosm /&gt;</span>
           <button
-            className="icon-button subtle"
-            aria-label="Create space"
-            title="Create space"
+            className="icon-button"
+            aria-label="New space"
+            title="New space"
             onClick={() => createWorkspaceMutation.mutate()}
             disabled={createWorkspaceMutation.isPending}
           >
-            <Plus size={17} />
+            <Plus size={14} />
           </button>
         </div>
 
+        {/* Primary nav */}
         <nav className="primary-nav" aria-label="Primary">
           <a className="nav-item active" href="#">
-            <Home size={16} />
-            Home
+            <Home size={15} /> Home
           </a>
           <a className="nav-item" href="#">
-            <Search size={16} />
-            Search
+            <Search size={15} /> Search
           </a>
           <a className="nav-item" href="#">
-            <Bot size={16} />
-            Companion
+            <Bot size={15} /> Companion
           </a>
         </nav>
 
-
-
+        {/* Library */}
         <div className="sidebar-section hierarchy-section">
           <div className="sidebar-section-head">
             <span className="section-label">// library</span>
-            {activeWorkspaceId ? (
+            {activeWorkspaceId && (
               <button
                 className="sidebar-inline-action"
-                aria-label="Create notebook"
+                aria-label="New notebook"
                 title="New notebook"
                 disabled={createNotebookMutation.isPending}
                 onClick={() => createNotebookMutation.mutate()}
               >
-                <Plus size={13} />
+                <Plus size={11} />
               </button>
-            ) : null}
+            )}
           </div>
 
-          {activeWorkspaceId && notebooks.length === 0 && !notebooksQuery.isLoading ? (
+          {activeWorkspaceId && notebooks.length === 0 && !notebooksQuery.isLoading && (
             <div className="empty-sidebar-state compact">
-              <p>No notebooks in this space.</p>
+              <p>No notebooks yet.</p>
               <button onClick={() => createNotebookMutation.mutate()} disabled={createNotebookMutation.isPending}>
-                New notebook
+                + New notebook
               </button>
             </div>
-          ) : null}
+          )}
 
           <div className="library-tree">
             {notebooks.map((notebook) => (
               <div className="notebook-group" key={notebook.id}>
-                <div className={notebook.id === activeNotebookId ? "notebook-row active" : "notebook-row"}>
+
+                {/* Notebook row */}
+                <div className={`notebook-row${notebook.id === activeNotebookId ? " active" : ""}`}>
                   <button
                     className="row-main-action"
                     onClick={() => {
@@ -528,8 +479,15 @@ export function WorkspaceApp() {
                       setActivePageId(null);
                     }}
                   >
-                    <ChevronDown size={13} />
-                    <BookOpen size={14} />
+                    <ChevronDown
+                      size={12}
+                      style={{
+                        transition: "transform 180ms ease",
+                        transform: notebook.id === activeNotebookId ? "rotate(0deg)" : "rotate(-90deg)",
+                        flexShrink: 0,
+                      }}
+                    />
+                    <BookOpen size={13} style={{ flexShrink: 0 }} />
                     {renamingItemId === notebook.id ? (
                       <input
                         autoFocus
@@ -538,9 +496,8 @@ export function WorkspaceApp() {
                         onChange={(e) => setRenameDraft(e.target.value)}
                         onBlur={() => setRenamingItemId(null)}
                         onKeyDown={(e) => {
-                          if (e.key === "Enter" && renameDraft.trim()) {
+                          if (e.key === "Enter" && renameDraft.trim())
                             updateNotebookMutation.mutate({ title: renameDraft.trim() });
-                          }
                           if (e.key === "Escape") setRenamingItemId(null);
                         }}
                       />
@@ -548,49 +505,35 @@ export function WorkspaceApp() {
                       <span>{notebook.title}</span>
                     )}
                   </button>
-                  <button
-                    className="inline-edit-action"
-                    title="Rename"
-                    onClick={() => startRenaming(notebook.id, notebook.title)}
-                  >
-                    <Edit2 size={13} />
+                  <button className="inline-edit-action" title="Rename"
+                    onClick={() => startRenaming(notebook.id, notebook.title)}>
+                    <Edit2 size={11} />
                   </button>
-                  <button
-                    className="inline-delete-action"
-                    title="Delete"
+                  <button className="inline-delete-action" title="Delete"
                     disabled={deleteNotebookMutation.isPending}
-                    onClick={() => {
-                      if (window.confirm("Delete this notebook?")) deleteNotebookMutation.mutate(notebook.id);
-                    }}
-                  >
-                    <Trash2 size={13} />
+                    onClick={() => { if (window.confirm("Delete this notebook and all its contents?")) deleteNotebookMutation.mutate(notebook.id); }}>
+                    <Trash2 size={11} />
                   </button>
-                  {notebook.id === activeNotebookId ? (
-                    <button
-                      className="inline-create-action"
-                      aria-label="New section"
-                      title="New section"
+                  {notebook.id === activeNotebookId && (
+                    <button className="inline-create-action" title="New section"
                       disabled={createSectionMutation.isPending}
-                      onClick={() => createSectionMutation.mutate()}
-                    >
-                      <Plus size={13} />
+                      onClick={() => createSectionMutation.mutate()}>
+                      <Plus size={11} />
                     </button>
-                  ) : null}
+                  )}
                 </div>
 
-                {notebook.id === activeNotebookId ? (
+                {/* Sections */}
+                {notebook.id === activeNotebookId && (
                   <div className="section-list">
                     {sections.map((section) => (
                       <div className="section-group" key={section.id}>
-                        <div className={section.id === activeSectionId ? "section-row active" : "section-row"}>
+                        <div className={`section-row${section.id === activeSectionId ? " active" : ""}`}>
                           <button
                             className="row-main-action"
-                            onClick={() => {
-                              setActiveSectionId(section.id);
-                              setActivePageId(null);
-                            }}
+                            onClick={() => { setActiveSectionId(section.id); setActivePageId(null); }}
                           >
-                            <Folder size={13} />
+                            <Folder size={12} style={{ flexShrink: 0 }} />
                             {renamingItemId === section.id ? (
                               <input
                                 autoFocus
@@ -599,9 +542,8 @@ export function WorkspaceApp() {
                                 onChange={(e) => setRenameDraft(e.target.value)}
                                 onBlur={() => setRenamingItemId(null)}
                                 onKeyDown={(e) => {
-                                  if (e.key === "Enter" && renameDraft.trim()) {
+                                  if (e.key === "Enter" && renameDraft.trim())
                                     updateSectionMutation.mutate({ title: renameDraft.trim() });
-                                  }
                                   if (e.key === "Escape") setRenamingItemId(null);
                                 }}
                               />
@@ -609,210 +551,201 @@ export function WorkspaceApp() {
                               <span>{section.title}</span>
                             )}
                           </button>
-                          <button
-                            className="inline-edit-action"
-                            title="Rename"
-                            onClick={() => startRenaming(section.id, section.title)}
-                          >
-                            <Edit2 size={13} />
+                          <button className="inline-edit-action" title="Rename"
+                            onClick={() => startRenaming(section.id, section.title)}>
+                            <Edit2 size={11} />
                           </button>
-                          <button
-                            className="inline-delete-action"
-                            title="Delete"
+                          <button className="inline-delete-action" title="Delete"
                             disabled={deleteSectionMutation.isPending}
-                            onClick={() => {
-                              if (window.confirm("Delete this section?")) deleteSectionMutation.mutate(section.id);
-                            }}
-                          >
-                            <Trash2 size={13} />
+                            onClick={() => { if (window.confirm("Delete this section?")) deleteSectionMutation.mutate(section.id); }}>
+                            <Trash2 size={11} />
                           </button>
-                          {section.id === activeSectionId ? (
-                            <button
-                              className="inline-create-action"
-                              aria-label="New page"
-                              title="New page"
+                          {section.id === activeSectionId && (
+                            <button className="inline-create-action" title="New page"
                               disabled={createPageMutation.isPending}
-                              onClick={() => createPageMutation.mutate()}
-                            >
-                              <Plus size={13} />
+                              onClick={() => createPageMutation.mutate()}>
+                              <Plus size={11} />
                             </button>
-                          ) : null}
+                          )}
                         </div>
 
-                        {section.id === activeSectionId ? (
+                        {/* Pages */}
+                        {section.id === activeSectionId && (
                           <div className="page-list">
                             {pages.map((page) => (
-                              <div
-                                className={page.id === activePageId ? "page-row active" : "page-row"}
-                                key={page.id}
-                              >
-                                <button
-                                  className="row-main-action"
-                                  onClick={() => setActivePageId(page.id)}
-                                >
-                                  <FileText size={13} />
+                              <div className={`page-row${page.id === activePageId ? " active" : ""}`} key={page.id}>
+                                <button className="row-main-action" onClick={() => setActivePageId(page.id)}>
+                                  <FileText size={11} style={{ flexShrink: 0 }} />
                                   <span>{page.title}</span>
                                 </button>
-                                <button
-                                  className="inline-delete-action"
-                                  title="Delete"
+                                <button className="inline-delete-action" title="Delete"
                                   disabled={deletePageMutation.isPending}
-                                  onClick={() => {
-                                    if (window.confirm("Delete this page?")) deletePageMutation.mutate(page.id);
-                                  }}
-                                >
-                                  <Trash2 size={13} />
+                                  onClick={() => { if (window.confirm("Delete this page?")) deletePageMutation.mutate(page.id); }}>
+                                  <Trash2 size={11} />
                                 </button>
                               </div>
                             ))}
                           </div>
-                        ) : null}
+                        )}
                       </div>
                     ))}
                   </div>
-                ) : null}
+                )}
               </div>
             ))}
           </div>
         </div>
 
+        {/* Footer */}
         <div className="sidebar-footer">
           <div className="user-chip refined">
-            <span>{user?.name?.slice(0, 1).toUpperCase() || "M"}</span>
+            <span>{user?.name?.slice(0, 1).toUpperCase() ?? "M"}</span>
             <div>
-              <strong>{user?.name || "Microcosm User"}</strong>
+              <strong>{user?.name ?? "Microcosm User"}</strong>
               <small>{user?.email}</small>
             </div>
           </div>
-          <a className="nav-item" href="#">
-            <Settings size={16} />
-            Settings
-          </a>
+          <a className="nav-item" href="#"><Settings size={14} /> Settings</a>
           <button className="nav-item nav-button" onClick={() => void logout()}>
-            <LogOut size={16} />
-            Logout
+            <LogOut size={14} /> Logout
           </button>
         </div>
       </aside>
 
+      {/* ── WORKSPACE ───────────────────────────────────────────────────── */}
       <section className="workspace">
+
+        {/* Topbar */}
         <header className="topbar">
-          <div>
-            <div className="eyebrow">import {"{ Knowledge }"} from "@you/memory"</div>
-            <h1>
-              const <span>Microcosm</span>:
+          <div className="topbar-left">
+            <p className="eyebrow">import {"{ Knowledge }"} from "@you/memory"</p>
+            <h1 className="topbar-title">
+              {activeWorkspace?.name
+                ? <><span>{activeWorkspace.name}</span></>
+                : <><span>Microcosm</span></>}
             </h1>
           </div>
           <button className="primary-button">
-            <Sparkles size={17} />
+            <Sparkles size={15} />
             Ask Companion
           </button>
         </header>
 
         <div className="content-grid">
-          <section className="editor-panel">
-            <div className="page-meta">
-              <span>{activeWorkspace?.name || "Space"}</span>
-              <span>/</span>
-              <span>{activeNotebook?.title || "Notebook"}</span>
-              <span>/</span>
-              <strong>{activePage?.title || "Page"}</strong>
-            </div>
 
+          {/* ── EDITOR PANEL ──────────────────────────────────────────── */}
+          <div className="editor-panel">
             {activePage ? (
-              <MicrocosmEditor
-                key={activePage.id}
-                blocks={activePage.blocks}
-                disabled={pageQuery.isLoading}
-                isSaving={updatePageMutation.isPending}
-                knowledgeStatus={activePage.knowledgeStatus}
-                onSave={(blocks) => {
-                  const firstBlock = blocks.length > 0 ? blocks[0] : null;
-                  const newTitle = firstBlock && firstBlock.content ? firstBlock.content.trim() : "Untitled Page";
-                  updatePageMutation.mutate({ title: newTitle, blocks });
-                }}
-              />
+              <>
+                <div className="page-meta">
+                  <span>{activeWorkspace?.name ?? "Space"}</span>
+                  <span className="page-meta-sep">›</span>
+                  <span>{activeNotebook?.title ?? "Notebook"}</span>
+                  <span className="page-meta-sep">›</span>
+                  <span>{activeSection?.title ?? "Section"}</span>
+                  <span className="page-meta-sep">›</span>
+                  <strong>{activePage.title}</strong>
+                </div>
+                <MicrocosmEditor
+                  key={activePage.id}
+                  blocks={activePage.blocks}
+                  disabled={pageQuery.isLoading}
+                  isSaving={updatePageMutation.isPending}
+                  knowledgeStatus={activePage.knowledgeStatus}
+                  onSave={(blocks) => {
+                    const firstBlock = blocks[0];
+                    const newTitle =
+                      firstBlock && typeof firstBlock.content === "string" && firstBlock.content.trim()
+                        ? firstBlock.content.trim()
+                        : "Untitled Page";
+                    updatePageMutation.mutate({ title: newTitle, blocks });
+                  }}
+                />
+              </>
             ) : (
               <div className="editor-empty-state">
-                <Sparkles size={22} />
+                <Sparkles size={28} />
                 <h2>{hierarchyState}</h2>
-                <p>Microcosm needs a space, notebook, section, and page before the editor can save knowledge blocks.</p>
+                <p>
+                  Microcosm needs a space, notebook, section, and page before the editor can save knowledge blocks.
+                </p>
                 <div className="empty-actions">
-                  {workspaces.length === 0 ? <button onClick={() => createWorkspaceMutation.mutate()}>Create space</button> : null}
-                  {activeWorkspaceId && notebooks.length === 0 ? <button onClick={() => createNotebookMutation.mutate()}>Create notebook</button> : null}
-                  {activeNotebookId && sections.length === 0 ? <button onClick={() => createSectionMutation.mutate()}>Create section</button> : null}
-                  {activeSectionId && pages.length === 0 ? <button onClick={() => createPageMutation.mutate()}>Create page</button> : null}
+                  {workspaces.length === 0 && (
+                    <button onClick={() => createWorkspaceMutation.mutate()} disabled={createWorkspaceMutation.isPending}>
+                      <Plus size={13} /> Create space
+                    </button>
+                  )}
+                  {activeWorkspaceId && notebooks.length === 0 && (
+                    <button onClick={() => createNotebookMutation.mutate()} disabled={createNotebookMutation.isPending}>
+                      <Plus size={13} /> Create notebook
+                    </button>
+                  )}
+                  {activeNotebookId && sections.length === 0 && (
+                    <button onClick={() => createSectionMutation.mutate()} disabled={createSectionMutation.isPending}>
+                      <Plus size={13} /> Create section
+                    </button>
+                  )}
+                  {activeSectionId && pages.length === 0 && (
+                    <button onClick={() => createPageMutation.mutate()} disabled={createPageMutation.isPending}>
+                      <Plus size={13} /> Create page
+                    </button>
+                  )}
                 </div>
               </div>
             )}
-          </section>
+          </div>
 
+          {/* ── AI COMPANION ──────────────────────────────────────────── */}
           <aside className="neo-panel">
+
+            {/* Header */}
             <div className="neo-header">
-              <span>// CHATBOT</span>
-              <span className="neo-status">
-                {chatMutation.isPending ? "GENERATING..." : "READY"}
+              <div className="neo-header-title">
+                <Zap size={13} />
+                AI Companion
+              </div>
+              <span className={`neo-status${chatMutation.isPending ? " generating" : ""}`}>
+                {chatMutation.isPending ? "Generating" : "Ready"}
               </span>
             </div>
 
+            {/* Chat history */}
             <div className="neo-chat-history">
               {chatHistory.length === 0 && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  <AnimatePresence>
-                    <motion.div
-                      className="neo-bubble ai"
-                      initial={{ opacity: 0, y: 12 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
-                    >
-                      <div className="neo-ai-label">
-                        <Bot size={14} /> AI Assistant
-                      </div>
-                      Hi! I'm your AI Assistant. Ask me anything about this workspace or the notes inside it!
-                    </motion.div>
-                  </AnimatePresence>
-                  
-                  <AnimatePresence>
-                    <motion.p
-                      className="neo-ai-label"
-                      style={{ color: '#666', marginTop: '8px' }}
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      transition={{ duration: 0.25, delay: 0.5 }}
-                    >
-                      <Sparkles size={12} /> SUGGESTED QUERIES:
-                    </motion.p>
-                  </AnimatePresence>
+                <div className="neo-welcome">
+                  <div className="neo-welcome-msg">
+                    <div className="neo-ai-label"><Bot size={12} /> Assistant</div>
+                    Hi! I'm your AI Companion. Ask me anything about your workspace, notes, or ideas.
+                  </div>
 
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    {["Summarize this notebook", "What is the key insight?", "Explain the recent notes"].map((sug, i) => (
-                      <AnimatePresence key={sug}>
-                        <motion.button
-                          onClick={() => {
-                            setChatInput(sug);
-                            setTimeout(() => document.getElementById('neo-input')?.focus(), 50);
-                          }}
-                          className="neo-chip"
-                          initial={{ opacity: 0, x: -12 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ duration: 0.3, delay: 0.6 + i * 0.15, ease: [0.22, 1, 0.36, 1] }}
-                        >
-                          <span style={{ color: 'blue', marginRight: '6px' }}>{">"}</span>
-                          {sug}
-                        </motion.button>
-                      </AnimatePresence>
+                  <span className="neo-suggestions-label">
+                    <Sparkles size={11} /> Suggested
+                  </span>
+
+                  <div className="neo-chips">
+                    {[
+                      { label: "Summarize this notebook", icon: <BookOpen size={12} /> },
+                      { label: "What are the key insights?", icon: <Sparkles size={12} /> },
+                      { label: "Explain my recent notes", icon: <FileText size={12} /> },
+                    ].map((sug) => (
+                      <motion.button
+                        key={sug.label}
+                        className="neo-chip"
+                        initial={{ opacity: 0, x: -8 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                        onClick={() => {
+                          setChatInput(sug.label);
+                          setTimeout(() => document.getElementById("neo-input")?.focus(), 30);
+                        }}
+                      >
+                        <span className="neo-chip-icon">{sug.icon}</span>
+                        {sug.label}
+                      </motion.button>
                     ))}
                   </div>
                 </div>
               )}
-<<<<<<< Updated upstream
-              
-              {chatHistory.map((msg, i) => (
-                <motion.div 
-                  key={i} 
-                  className={`neo-bubble ${msg.role}`}
-                  initial={{ opacity: 0, y: 10 }}
-=======
 
               <AnimatePresence initial={false}>
                 {chatHistory.map((msg, i) => (
@@ -849,49 +782,40 @@ export function WorkspaceApp() {
                 <motion.div
                   className="neo-thinking"
                   initial={{ opacity: 0, y: 6 }}
->>>>>>> Stashed changes
                   animate={{ opacity: 1, y: 0 }}
                 >
-                  {msg.role === "ai" && (
-                    <div className="neo-ai-label">
-                      <Bot size={14} /> AI Assistant
-                    </div>
-                  )}
-                  {msg.role === "user" ? (
-                    msg.content
-                  ) : (
-                    <ReactMarkdown className="markdown-prose">{msg.content}</ReactMarkdown>
-                  )}
-                </motion.div>
-              ))}
-              
-              {chatMutation.isPending && (
-                <motion.div 
-                  className="neo-bubble ai"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                >
-                  <div className="neo-ai-label">
-                    <Bot size={14} /> AI Assistant
+                  <div className="neo-ai-label" style={{ margin: 0 }}><Bot size={12} /></div>
+                  <div className="neo-thinking-dots">
+                    <span /><span /><span />
                   </div>
-                  Generating response...
                 </motion.div>
               )}
+
+              <div ref={chatBottomRef} />
             </div>
 
+            {/* Input */}
             <div className="neo-input-wrap">
-              <div className="neo-input-box">
-                <span style={{ fontWeight: 'bold' }}>{">"}</span>
-                <input 
+              <div className="neo-input-row">
+                <input
                   id="neo-input"
-                  placeholder="Ask from this space..." 
+                  placeholder="Ask from this space…"
                   value={chatInput}
                   onChange={(e) => setChatInput(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleSendChat()}
                   disabled={chatMutation.isPending}
                 />
+                <button
+                  className="neo-send-btn"
+                  onClick={handleSendChat}
+                  disabled={!chatInput.trim() || chatMutation.isPending}
+                  aria-label="Send"
+                >
+                  <SendHorizontal size={14} />
+                </button>
               </div>
             </div>
+
           </aside>
         </div>
       </section>
