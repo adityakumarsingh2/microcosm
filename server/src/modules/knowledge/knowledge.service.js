@@ -74,7 +74,7 @@ export async function indexPage(page, notebookId, sectionId) {
  * @param {object} page - Mongoose Page document
  */
 export async function triggerIndexIfNeeded(page) {
-  if (page.knowledgeStatus !== "pending") return;
+  if (page.knowledgeStatus !== "pending" && page.knowledgeStatus !== "failed") return;
 
   const result = await indexPage(page, page.notebookId, page.sectionId);
 
