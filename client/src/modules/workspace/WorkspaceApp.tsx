@@ -20,6 +20,10 @@ import {
   Edit2,
   Trash2,
   Zap,
+  Copy,
+  PlusSquare,
+  RotateCcw,
+  Check,
 } from "lucide-react";
 import { useAuth } from "../auth/AuthProvider";
 import { MicrocosmEditor } from "../editor/MicrocosmEditor";
@@ -135,9 +139,58 @@ export function WorkspaceApp() {
   const [renameDraft, setRenameDraft] = useState("");
 
   // Companion state
+  const [chatScope, setChatScope] = useState<"workspace" | "notebook" | "page">("workspace");
   const [chatHistory, setChatHistory] = useState<{ role: "user" | "ai"; content: string; sources?: Source[] }[]>([]);
   const [chatInput, setChatInput] = useState("");
   const chatBottomRef = useRef<HTMLDivElement>(null);
+  const [copiedMessageIndex, setCopiedMessageIndex] = useState<number | null>(null);
+  const [insertedMessageIndex, setInsertedMessageIndex] = useState<number | null>(null);
+
+  const handleCopyMessage = (text: string, index: number) => {
+    navigator.clipboard.writeText(text);
+    setCopiedMessageIndex(index);
+    setTimeout(() => setCopiedMessageIndex(null), 2000);
+  };
+
+  const handleInsertMessage = (text: string, index: number) => {
+    window.dispatchEvent(new CustomEvent("insert-ai-text", { detail: { text } }));
+    setInsertedMessageIndex(index);
+    setTimeout(() => setInsertedMessageIndex(null), 2000);
+  };
+
+  useEffect(() => {
+    if (!activePageId && chatScope === "page") {
+      setChatScope("workspace");
+    }
+  }, [activePageId, chatScope]);
+
+  useEffect(() => {
+    if (!activeNotebookId && chatScope === "notebook") {
+      setChatScope("workspace");
+    }
+  }, [activeNotebookId, chatScope]);
+
+  const suggestions = useMemo(() => {
+    if (chatScope === "page") {
+      return [
+        { label: "Summarize this page", icon: <FileText size={12} /> },
+        { label: "Find key concepts", icon: <Sparkles size={12} /> },
+        { label: "Create a study quiz from this page", icon: <Bot size={12} /> },
+      ];
+    }
+    if (chatScope === "notebook") {
+      return [
+        { label: "Summarize this notebook", icon: <BookOpen size={12} /> },
+        { label: "Find connections across pages", icon: <Sparkles size={12} /> },
+        { label: "What are the action items here?", icon: <Bot size={12} /> },
+      ];
+    }
+    return [
+      { label: "Explain my recent notes", icon: <FileText size={12} /> },
+      { label: "What did I write about this week?", icon: <Sparkles size={12} /> },
+      { label: "What are the key insights in my space?", icon: <Bot size={12} /> },
+    ];
+  }, [chatScope]);
 
   function startRenaming(id: string, currentTitle: string) {
     setRenamingItemId(id);
@@ -225,7 +278,9 @@ export function WorkspaceApp() {
         token: accessToken!,
         prompt,
         workspaceId: activeWorkspaceId ?? undefined,
-        scope: "workspace",
+        scope: chatScope,
+        notebookId: chatScope === "notebook" ? activeNotebookId ?? undefined : undefined,
+        pageId: chatScope === "page" ? activePageId ?? undefined : undefined,
       }).then((r) => r.data),
     onSuccess: (data) => {
       setChatHistory((prev) => [...prev, { role: "ai", content: data.response, sources: data.sources }]);
@@ -704,9 +759,49 @@ export function WorkspaceApp() {
                 <Zap size={13} />
                 AI Companion
               </div>
-              <span className={`neo-status${chatMutation.isPending ? " generating" : ""}`}>
-                {chatMutation.isPending ? "Generating" : "Ready"}
-              </span>
+              <div className="neo-header-right">
+                {chatHistory.length > 0 && (
+                  <button
+                    className="neo-clear-btn"
+                    onClick={() => setChatHistory([])}
+                    title="Clear chat history"
+                  >
+                    <RotateCcw size={12} />
+                  </button>
+                )}
+                <span className={`neo-status${chatMutation.isPending ? " generating" : ""}`}>
+                  {chatMutation.isPending ? "Generating" : "Ready"}
+                </span>
+              </div>
+            </div>
+
+            {/* Scope Selector segmented control */}
+            <div className="neo-scope-selector">
+              <button
+                className={`neo-scope-btn ${chatScope === "workspace" ? "active" : ""}`}
+                onClick={() => setChatScope("workspace")}
+              >
+                <Layers3 size={11} />
+                Workspace
+              </button>
+              <button
+                className={`neo-scope-btn ${chatScope === "notebook" ? "active" : ""}`}
+                disabled={!activeNotebookId}
+                onClick={() => setChatScope("notebook")}
+                title={!activeNotebookId ? "No notebook selected" : `Search Notebook: ${activeNotebook?.title}`}
+              >
+                <BookOpen size={11} />
+                Notebook
+              </button>
+              <button
+                className={`neo-scope-btn ${chatScope === "page" ? "active" : ""}`}
+                disabled={!activePageId}
+                onClick={() => setChatScope("page")}
+                title={!activePageId ? "No page open" : `Search Page: ${activePage?.title}`}
+              >
+                <FileText size={11} />
+                Page
+              </button>
             </div>
 
             {/* Chat history */}
@@ -715,7 +810,7 @@ export function WorkspaceApp() {
                 <div className="neo-welcome">
                   <div className="neo-welcome-msg">
                     <div className="neo-ai-label"><Bot size={12} /> Assistant</div>
-                    Hi! I'm your AI Companion. Ask me anything about your workspace, notes, or ideas.
+                    Hi! I'm your AI Companion. Ask me anything about your {chatScope === "workspace" ? "workspace" : chatScope === "notebook" ? "active notebook" : "active page"}.
                   </div>
 
                   <span className="neo-suggestions-label">
@@ -723,11 +818,7 @@ export function WorkspaceApp() {
                   </span>
 
                   <div className="neo-chips">
-                    {[
-                      { label: "Summarize this notebook", icon: <BookOpen size={12} /> },
-                      { label: "What are the key insights?", icon: <Sparkles size={12} /> },
-                      { label: "Explain my recent notes", icon: <FileText size={12} /> },
-                    ].map((sug) => (
+                    {suggestions.map((sug) => (
                       <motion.button
                         key={sug.label}
                         className="neo-chip"
@@ -757,7 +848,27 @@ export function WorkspaceApp() {
                     transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
                   >
                     {msg.role === "ai" && (
-                      <div className="neo-ai-label"><Bot size={12} /> Assistant</div>
+                      <div className="neo-ai-meta">
+                        <div className="neo-ai-label"><Bot size={12} /> Assistant</div>
+                        <div className="neo-msg-actions">
+                          <button
+                            className="neo-action-btn"
+                            onClick={() => handleCopyMessage(msg.content, i)}
+                            title="Copy response"
+                          >
+                            {copiedMessageIndex === i ? <Check size={11} /> : <Copy size={11} />}
+                          </button>
+                          {activePageId && (
+                            <button
+                              className="neo-action-btn"
+                              onClick={() => handleInsertMessage(msg.content, i)}
+                              title="Insert into page"
+                            >
+                              {insertedMessageIndex === i ? <Check size={11} style={{ color: "#4ade80" }} /> : <PlusSquare size={11} />}
+                            </button>
+                          )}
+                        </div>
+                      </div>
                     )}
                     {msg.role === "user" ? (
                       msg.content
@@ -799,7 +910,7 @@ export function WorkspaceApp() {
               <div className="neo-input-row">
                 <input
                   id="neo-input"
-                  placeholder="Ask from this space…"
+                  placeholder={`Ask from this ${chatScope}…`}
                   value={chatInput}
                   onChange={(e) => setChatInput(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleSendChat()}
