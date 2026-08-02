@@ -78,6 +78,76 @@ class RagService:
             page_id=page_id,
         )
 
+    def index_document(
+        self,
+        document_id: str,
+        workspace_id: str,
+        url: str,
+        title: str,
+    ) -> Dict[str, Any]:
+        """
+        Download the PDF, parse it, chunk the text, embed it, and upsert it into Qdrant.
+        """
+        try:
+            # 1. Parse PDF pages
+            from app.services.pdf_parser import pdf_parser
+            pages = pdf_parser.extract_text(url)
+
+            if not pages:
+                return {"status": "empty", "chunksIndexed": 0}
+
+            # 2. Chunk pages
+            chunks = []
+            chunk_index = 0
+
+            # Simple text chunker by page and sliding window (500 chars with 100 overlap)
+            for page in pages:
+                text = page["text"]
+                page_num = page["page_num"]
+
+                if not text:
+                    continue
+
+                window_size = 500
+                overlap = 100
+
+                i = 0
+                while i < len(text):
+                    chunk_text = text[i : i + window_size].strip()
+                    if chunk_text:
+                        chunks.append({
+                            "chunkIndex": chunk_index,
+                            "text": chunk_text,
+                            "pageNum": page_num,
+                        })
+                        chunk_index += 1
+                    i += (window_size - overlap)
+
+            if not chunks:
+                return {"status": "empty", "chunksIndexed": 0}
+
+            # 3. Embed text
+            texts = [c["text"] for c in chunks]
+            vectors = embedding_service.embed_batch(texts)
+
+            # 4. Clear existing chunks
+            qdrant_service.delete_document_chunks(document_id)
+
+            # 5. Upsert to Qdrant
+            qdrant_service.upsert_document_chunks(
+                chunks=chunks,
+                vectors=vectors,
+                workspace_id=workspace_id,
+                document_id=document_id,
+                document_title=title,
+            )
+
+            return {"status": "indexed", "chunksIndexed": len(chunks)}
+
+        except Exception as e:
+            logger.error(f"Failed to index document {document_id}: {e}")
+            return {"status": "error", "chunksIndexed": 0, "error": str(e)}
+
     # ------------------------------------------------------------------ #
     # Prompt building
     # ------------------------------------------------------------------ #
@@ -91,8 +161,12 @@ class RagService:
         """
         context_blocks = []
         for i, chunk in enumerate(context_chunks, 1):
+            source_label = chunk['pageTitle']
+            if chunk.get("type") == "document" and chunk.get("pageNum"):
+                source_label = f"{chunk['pageTitle']} (page {chunk['pageNum']})"
+
             context_blocks.append(
-                f"[Source {i}: {chunk['pageTitle']}]\n{chunk['text']}"
+                f"[Source {i}: {source_label}]\n{chunk['text']}"
             )
 
         context_text = "\n\n---\n\n".join(context_blocks)
@@ -101,7 +175,7 @@ class RagService:
 Your user has a second-brain note-taking system called Microcosm.
 You must answer the user's question using ONLY the provided context from their notes.
 If the context does not contain enough information to answer fully, say so honestly.
-Always cite the source page title(s) when you use information from the context.
+Always cite the source page title(s) or document names when you use information from the context.
 
 --- USER NOTES CONTEXT ---
 {context_text}

@@ -29,4 +29,6 @@ export const env = {
   cloudinaryCloudName: process.env.CLOUDINARY_CLOUD_NAME || parsedCloudinary.cloudName || "",
   cloudinaryApiKey: process.env.CLOUDINARY_API_KEY || parsedCloudinary.apiKey || "",
   cloudinaryApiSecret: process.env.CLOUDINARY_API_SECRET || parsedCloudinary.apiSecret || "",
+  pythonAiServiceUrl: process.env.PYTHON_AI_SERVICE_URL || "http://127.0.0.1:8000",
+  internalServiceToken: process.env.INTERNAL_SERVICE_TOKEN || "change-me",
 };
