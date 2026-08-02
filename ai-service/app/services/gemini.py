@@ -9,7 +9,7 @@ if api_key:
 
 class GeminiService:
     def __init__(self):
-        self.model = genai.GenerativeModel('gemini-2.0-flash-lite')
+        self.model = genai.GenerativeModel('gemini-3.1-flash-lite')
 
     async def generate_response(self, prompt: str) -> str:
         if not os.getenv("GEMINI_API_KEY"):

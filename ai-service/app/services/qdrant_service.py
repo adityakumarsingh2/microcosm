@@ -22,7 +22,7 @@ from qdrant_client.http.models import (
 logger = logging.getLogger(__name__)
 
 COLLECTION_NAME = "microcosm_notes"
-VECTOR_SIZE = 768  # Gemini text-embedding-004
+VECTOR_SIZE = 768  # gemini-embedding-001
 
 
 class QdrantService:
@@ -67,17 +67,20 @@ class QdrantService:
                 logger.info(f"Qdrant collection '{COLLECTION_NAME}' already exists.")
 
             # Create payload index for filtering (required by Qdrant Cloud Serverless/Free plans for filtering/deletes)
-            for field in ["pageId", "workspaceId", "notebookId", "documentId"]:
-                try:
-                    client.create_payload_index(
-                        collection_name=COLLECTION_NAME,
-                        field_name=field,
-                        field_schema=PayloadSchemaType.KEYWORD,
-                    )
-                    logger.info(f"Payload index ensured for '{field}'.")
-                except Exception as pe:
-                    # Qdrant client may raise if the index already exists, which is expected
-                    logger.debug(f"Payload index for '{field}' already exists or note: {pe}")
+            try:
+                client.create_payload_index(
+                    collection_name=COLLECTION_NAME,
+                    field_name="pageId",
+                    field_schema="keyword",
+                )
+                client.create_payload_index(
+                    collection_name=COLLECTION_NAME,
+                    field_name="workspaceId",
+                    field_schema="keyword",
+                )
+                logger.info("Payload indexes ensured for pageId and workspaceId.")
+            except Exception as pe:
+                logger.warning(f"Failed to create payload indexes: {pe}")
         except Exception as e:
             logger.error(f"Failed to ensure Qdrant collection: {e}")
             raise
@@ -230,13 +233,13 @@ class QdrantService:
                 FieldCondition(key="documentId", match=MatchValue(value=document_id))
             )
 
-        results = client.search(
+        results = client.query_points(
             collection_name=COLLECTION_NAME,
-            query_vector=query_vector,
+            query=query_vector,
             query_filter=Filter(must=must_conditions),
             limit=top_k,
             with_payload=True,
-        )
+        ).points
 
         return [
             {
