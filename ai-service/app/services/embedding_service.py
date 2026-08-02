@@ -1,15 +1,15 @@
 """
 embedding_service.py
 
-Generates vector embeddings using Google's text-embedding-004 model via the
+Generates vector embeddings using Google's embedding-001 model via the
 google-generativeai SDK.
 """
 import os
 from typing import List
 import google.generativeai as genai
 
-EMBEDDING_MODEL = "models/text-embedding-004"
-EMBEDDING_DIMENSION = 768  # text-embedding-004 output dimension
+EMBEDDING_MODEL = "models/embedding-001"
+EMBEDDING_DIMENSION = 768  # embedding-001 output dimension
 
 
 class EmbeddingService:
