@@ -8,8 +8,8 @@ import os
 from typing import List
 import google.generativeai as genai
 
-EMBEDDING_MODEL = "models/embedding-001"
-EMBEDDING_DIMENSION = 768  # embedding-001 output dimension
+EMBEDDING_MODEL = "models/gemini-embedding-001"
+EMBEDDING_DIMENSION = 768  # gemini-embedding-001 output dimension
 
 
 class EmbeddingService:
@@ -27,6 +27,7 @@ class EmbeddingService:
             model=EMBEDDING_MODEL,
             content=text,
             task_type="retrieval_document",
+            output_dimensionality=EMBEDDING_DIMENSION,
         )
         return result["embedding"]
 
@@ -38,6 +39,7 @@ class EmbeddingService:
             model=EMBEDDING_MODEL,
             content=text,
             task_type="retrieval_query",
+            output_dimensionality=EMBEDDING_DIMENSION,
         )
         return result["embedding"]
 

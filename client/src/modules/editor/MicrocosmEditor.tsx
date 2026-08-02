@@ -289,6 +289,19 @@ export function MicrocosmEditor({
     };
   }, []);
 
+  // Listen for text insertion events from AI Companion
+  useEffect(() => {
+    if (!editor) return;
+    const handleInsertText = (e: Event) => {
+      const customEvent = e as CustomEvent<{ text: string }>;
+      if (customEvent.detail?.text) {
+        editor.chain().focus().insertContent(customEvent.detail.text).run();
+      }
+    };
+    window.addEventListener("insert-ai-text", handleInsertText);
+    return () => window.removeEventListener("insert-ai-text", handleInsertText);
+  }, [editor]);
+
   // ── Handlers ─────────────────────────────────────────────────────────────
 
   function saveNow() {
