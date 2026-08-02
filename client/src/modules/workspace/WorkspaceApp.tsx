@@ -1065,6 +1065,7 @@ export function WorkspaceApp() {
               </div>
             )}
           </div>
+        )}
 
           {/* ── AI COMPANION ──────────────────────────────────────────── */}
           <aside className="neo-panel">
