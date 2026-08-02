@@ -4,6 +4,8 @@ export type Source = {
   pageId: string;
   pageTitle: string;
   snippet: string;
+  type?: "page" | "document";
+  pageNum?: number | null;
 };
 
 type ChatResponse = {

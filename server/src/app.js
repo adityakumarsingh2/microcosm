@@ -11,6 +11,7 @@ import { notebookRouter } from "./modules/notebooks/notebook.route.js";
 import { workspaceRouter } from "./modules/workspaces/workspace.route.js";
 import { companionRouter } from "./modules/companion/companion.route.js";
 import { uploadsRouter } from "./modules/uploads/uploads.route.js";
+import { documentRouter } from "./modules/documents/document.route.js";
 import { notFoundHandler } from "./shared/errors/not-found.handler.js";
 import { errorHandler } from "./shared/errors/error.handler.js";
 
@@ -27,6 +28,8 @@ app.use(express.json({ limit: "50mb" }));
 app.use(cookieParser());
 app.use(morgan("dev"));
 
+app.use("/uploads", express.static("uploads"));
+
 app.use("/api/v1/health", healthRouter);
 app.use("/api/v1/auth", authRouter);
 app.use("/api/v1/workspaces", workspaceRouter);
@@ -35,6 +38,7 @@ app.use("/api/v1", sectionRouter);
 app.use("/api/v1", pageRouter);
 app.use("/api/v1", companionRouter);
 app.use("/api/v1", uploadsRouter);
+app.use("/api/v1", documentRouter);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

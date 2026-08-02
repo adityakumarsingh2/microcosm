@@ -118,6 +118,7 @@ class QdrantService:
                         "chunkIndex": chunk.chunk_index,
                         "blockIds": chunk.block_ids,
                         "text": chunk.text,
+                        "type": "page",
                     },
                 )
             )
@@ -125,6 +126,42 @@ class QdrantService:
         if points:
             client.upsert(collection_name=COLLECTION_NAME, points=points)
             logger.info(f"Upserted {len(points)} chunks for page {page_id}")
+
+    def upsert_document_chunks(
+        self,
+        chunks: List[Dict[str, Any]],
+        vectors: List[List[float]],
+        workspace_id: str,
+        document_id: str,
+        document_title: str,
+    ):
+        """
+        Upsert chunk vectors for an uploaded PDF document into Qdrant.
+        """
+        client = self._get_client()
+        points = []
+
+        for chunk, vector in zip(chunks, vectors):
+            point_id = str(uuid.uuid4())
+            points.append(
+                PointStruct(
+                    id=point_id,
+                    vector=vector,
+                    payload={
+                        "workspaceId": workspace_id,
+                        "documentId": document_id,
+                        "pageTitle": document_title,  # map to pageTitle for uniform UI citations
+                        "chunkIndex": chunk["chunkIndex"],
+                        "text": chunk["text"],
+                        "pageNum": chunk["pageNum"],
+                        "type": "document",
+                    },
+                )
+            )
+
+        if points:
+            client.upsert(collection_name=COLLECTION_NAME, points=points)
+            logger.info(f"Upserted {len(points)} chunks for document {document_id}")
 
     def delete_page_chunks(self, page_id: str):
         """Remove all vectors for a given page (called before re-indexing)."""
@@ -145,6 +182,25 @@ class QdrantService:
         except Exception as e:
             logger.warning(f"Could not delete chunks for page {page_id}: {e}")
 
+    def delete_document_chunks(self, document_id: str):
+        """Remove all vectors for a given PDF document."""
+        try:
+            client = self._get_client()
+            client.delete(
+                collection_name=COLLECTION_NAME,
+                points_selector=Filter(
+                    must=[
+                        FieldCondition(
+                            key="documentId",
+                            match=MatchValue(value=document_id),
+                        )
+                    ]
+                ),
+            )
+            logger.info(f"Deleted existing chunks for document {document_id}")
+        except Exception as e:
+            logger.warning(f"Could not delete chunks for document {document_id}: {e}")
+
     def search(
         self,
         query_vector: List[float],
@@ -152,9 +208,10 @@ class QdrantService:
         top_k: int = 5,
         notebook_id: Optional[str] = None,
         page_id: Optional[str] = None,
+        document_id: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """
-        Semantic search filtered by workspaceId (and optionally notebookId/pageId).
+        Semantic search filtered by workspaceId (and optionally notebookId/pageId/documentId).
 
         Returns a list of payload dicts for the top matching chunks.
         """
@@ -171,6 +228,10 @@ class QdrantService:
             must_conditions.append(
                 FieldCondition(key="pageId", match=MatchValue(value=page_id))
             )
+        if document_id:
+            must_conditions.append(
+                FieldCondition(key="documentId", match=MatchValue(value=document_id))
+            )
 
         results = client.query_points(
             collection_name=COLLECTION_NAME,
@@ -183,11 +244,13 @@ class QdrantService:
         return [
             {
                 "score": r.score,
-                "pageId": r.payload.get("pageId", ""),
+                "pageId": r.payload.get("pageId", "") or r.payload.get("documentId", ""),
                 "pageTitle": r.payload.get("pageTitle", ""),
                 "text": r.payload.get("text", ""),
                 "chunkIndex": r.payload.get("chunkIndex", 0),
                 "blockIds": r.payload.get("blockIds", []),
+                "type": r.payload.get("type", "page"),
+                "pageNum": r.payload.get("pageNum", None),
             }
             for r in results
         ]

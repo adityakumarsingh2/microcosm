@@ -47,6 +47,7 @@ import { createWorkspace, listWorkspaces, updateWorkspace, deleteWorkspace } fro
 import { chatWithCompanion } from "./companion.api";
 import type { Source } from "./companion.api";
 import { CitationBadge } from "./CitationBadge";
+import { listDocuments, uploadDocument, deleteDocument } from "../documents/document.api";
 
 const emptyBlocks: PageBlock[] = [];
 
@@ -191,6 +192,51 @@ export function WorkspaceApp() {
       { label: "What are the key insights in my space?", icon: <Bot size={12} /> },
     ];
   }, [chatScope]);
+
+  // Document state & upload logic
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const documentsQuery = useQuery({
+    queryKey: ["documents", activeWorkspaceId],
+    queryFn: () => listDocuments(accessToken!, activeWorkspaceId!),
+    enabled: Boolean(accessToken && activeWorkspaceId),
+    refetchInterval: (query) => {
+      const docs = query.state.data?.data.documents ?? [];
+      const hasPending = docs.some(
+        (d) => d.status === "pending" || d.status === "processing"
+      );
+      return hasPending ? 3000 : false;
+    },
+  });
+  const documents = documentsQuery.data?.data.documents ?? [];
+
+  const uploadDocumentMutation = useMutation({
+    mutationFn: (file: File) => uploadDocument(accessToken!, activeWorkspaceId!, file),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["documents", activeWorkspaceId] });
+    },
+    onError: (err) => {
+      alert(`Failed to upload document: ${err instanceof Error ? err.message : "unknown error"}`);
+    },
+  });
+
+  const deleteDocumentMutation = useMutation({
+    mutationFn: (id: string) => deleteDocument(accessToken!, id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["documents", activeWorkspaceId] });
+    },
+  });
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.type !== "application/pdf") {
+      alert("Only PDF files are supported.");
+      return;
+    }
+    uploadDocumentMutation.mutate(file);
+    e.target.value = ""; // clear file select
+  }
 
   function startRenaming(id: string, currentTitle: string) {
     setRenamingItemId(id);
@@ -649,6 +695,108 @@ export function WorkspaceApp() {
               </div>
             ))}
           </div>
+        </div>
+
+        {/* Documents */}
+        <div className="sidebar-section hierarchy-section" style={{ marginTop: "16px", borderTop: "1.5px solid var(--border-strong)", paddingTop: "14px" }}>
+          <div className="sidebar-section-head">
+            <span className="section-label">// documents</span>
+            {activeWorkspaceId && (
+              <button
+                className="sidebar-inline-action"
+                aria-label="Upload document"
+                title="Upload PDF document"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadDocumentMutation.isPending}
+              >
+                <Plus size={11} />
+              </button>
+            )}
+          </div>
+
+          <input
+            type="file"
+            ref={fileInputRef}
+            style={{ display: "none" }}
+            accept=".pdf"
+            onChange={handleFileChange}
+          />
+
+          {activeWorkspaceId && documents.length === 0 && !documentsQuery.isLoading && (
+            <div className="empty-sidebar-state compact">
+              <p>No documents yet.</p>
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadDocumentMutation.isPending}
+                style={{
+                  fontSize: "0.7rem",
+                  padding: "3px 8px",
+                  border: "1.5px solid var(--border-strong)",
+                  borderRadius: "4px",
+                  background: "var(--bg-soft)",
+                  cursor: "pointer",
+                  color: "var(--text-2)"
+                }}
+              >
+                + Upload PDF
+              </button>
+            </div>
+          )}
+
+          {activeWorkspaceId && (
+            <div className="sidebar-tree" style={{ display: "flex", flexDirection: "column", gap: "6px", marginTop: "8px" }}>
+              {documentsQuery.isLoading && <div className="empty-sidebar-state compact"><p>Loading docs…</p></div>}
+              {documents.map((doc) => (
+                <div
+                  className="document-row"
+                  key={doc.id}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "4px 8px",
+                    fontSize: "0.78rem",
+                    fontFamily: "var(--font-mono)",
+                    color: "var(--text-2)",
+                    border: "1.5px solid var(--border-strong)",
+                    borderRadius: "6px",
+                    background: "var(--bg-soft)",
+                    boxShadow: "1.5px 1.5px 0px 0px var(--border-strong)",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px", flex: 1, minWidth: 0 }}>
+                    <FileText size={11} style={{ flexShrink: 0, color: "var(--dim)" }} />
+                    <span style={{ textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }} title={doc.title}>
+                      {doc.title}
+                    </span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px", marginLeft: "4px" }}>
+                    {doc.status === "pending" || doc.status === "processing" ? (
+                      <span className="neo-status generating" style={{ fontSize: "0.55rem", padding: "1px 4px" }}>
+                        syncing
+                      </span>
+                    ) : doc.status === "indexed" ? (
+                      <span className="neo-status" style={{ fontSize: "0.55rem", padding: "1px 4px", color: "#4ade80", borderColor: "#22c55e" }}>
+                        ready
+                      </span>
+                    ) : (
+                      <span className="neo-status" style={{ fontSize: "0.55rem", padding: "1px 4px", color: "#ef4444", borderColor: "#ef4444" }}>
+                        failed
+                      </span>
+                    )}
+                    <button
+                      className="inline-delete-action"
+                      style={{ background: "transparent", border: "none", color: "var(--dim)", padding: 0, cursor: "pointer", display: "grid", placeItems: "center" }}
+                      title="Delete document"
+                      onClick={() => { if (window.confirm("Delete this document?")) deleteDocumentMutation.mutate(doc.id); }}
+                    >
+                      <Trash2 size={11} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Footer */}
