@@ -8,7 +8,7 @@ import os
 from typing import List
 import google.generativeai as genai
 
-EMBEDDING_MODEL = "models/gemini-embedding-001"
+EMBEDDING_MODEL = os.getenv("GEMINI_EMBEDDING_MODEL", "models/gemini-embedding-001")
 EMBEDDING_DIMENSION = 768  # gemini-embedding-001 output dimension
 
 

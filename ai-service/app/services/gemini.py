@@ -7,9 +7,12 @@ if api_key:
     genai.configure(api_key=api_key)
 
 
+CHAT_MODEL = os.getenv("GEMINI_CHAT_MODEL", "gemini-2.0-flash-lite")
+
+
 class GeminiService:
     def __init__(self):
-        self.model = genai.GenerativeModel('gemini-3.1-flash-lite')
+        self.model = genai.GenerativeModel(CHAT_MODEL)
 
     async def generate_response(self, prompt: str) -> str:
         if not os.getenv("GEMINI_API_KEY"):
