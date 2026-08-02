@@ -1,4 +1,4 @@
-﻿import mongoose from "mongoose";
+import mongoose from "mongoose";
 
 const blockSchema = new mongoose.Schema(
   {
@@ -73,6 +73,10 @@ const pageSchema = new mongoose.Schema(
       default: "not_indexed",
       index: true,
     },
+    tags: {
+      type: [String],
+      default: [],
+    },
   },
   { timestamps: true },
 );
@@ -91,6 +95,7 @@ pageSchema.methods.toJSONView = function toJSONView() {
     blocks: this.blocks,
     status: this.status,
     knowledgeStatus: this.knowledgeStatus,
+    tags: this.tags || [],
     createdAt: this.createdAt,
     updatedAt: this.updatedAt,
   };

@@ -41,13 +41,19 @@ import {
   updateSection,
   deleteSection,
   deletePage,
+  getRelatedPages,
+  getWorkspaceGraph,
   type PageBlock,
+  type RelatedPage,
+  type GraphNode,
+  type GraphEdge,
 } from "./content.api";
 import { createWorkspace, listWorkspaces, updateWorkspace, deleteWorkspace } from "./workspace.api";
 import { chatWithCompanion } from "./companion.api";
 import type { Source } from "./companion.api";
 import { CitationBadge } from "./CitationBadge";
 import { listDocuments, uploadDocument, deleteDocument } from "../documents/document.api";
+import { KnowledgeGraph } from "./KnowledgeGraph";
 
 const emptyBlocks: PageBlock[] = [];
 
@@ -144,6 +150,7 @@ export function WorkspaceApp() {
   const [chatHistory, setChatHistory] = useState<{ role: "user" | "ai"; content: string; sources?: Source[] }[]>([]);
   const [chatInput, setChatInput] = useState("");
   const chatBottomRef = useRef<HTMLDivElement>(null);
+  const [isGraphView, setIsGraphView] = useState(false);
   const [copiedMessageIndex, setCopiedMessageIndex] = useState<number | null>(null);
   const [insertedMessageIndex, setInsertedMessageIndex] = useState<number | null>(null);
 
@@ -315,6 +322,39 @@ export function WorkspaceApp() {
   const activeNotebook  = notebooks.find((n) => n.id === activeNotebookId);
   const activeSection   = sections.find((s) => s.id === activeSectionId);
   const activePage      = pageQuery.data?.data.page;
+
+  const graphQuery = useQuery({
+    queryKey: ["graph", activeWorkspaceId],
+    queryFn: () => getWorkspaceGraph(accessToken!, activeWorkspaceId!),
+    enabled: Boolean(accessToken && activeWorkspaceId && isGraphView),
+  });
+  const graphData = graphQuery.data?.data ?? { nodes: [], edges: [] };
+
+  const relatedPagesQuery = useQuery({
+    queryKey: ["relatedPages", activePageId],
+    queryFn: () => getRelatedPages(accessToken!, activePageId!),
+    enabled: Boolean(accessToken && activePageId),
+  });
+  const relatedPages = relatedPagesQuery.data?.data.related ?? [];
+
+  function handleGraphNodeClick(nodeId: string) {
+    const node = graphData.nodes.find((n) => n.id === nodeId);
+    if (!node || node.type !== "page") return;
+
+    if (node.notebookId) setActiveNotebookId(node.notebookId);
+    if (node.sectionId) setActiveSectionId(node.sectionId);
+    setActivePageId(node.id);
+    setIsGraphView(false); // Switch to editor view
+  }
+
+  function handleNavigateToPage(pageId: string) {
+    const relPage = relatedPages.find((p) => p.id === pageId);
+    if (!relPage) return;
+
+    if (relPage.notebookId) setActiveNotebookId(relPage.notebookId);
+    if (relPage.sectionId) setActiveSectionId(relPage.sectionId);
+    setActivePageId(relPage.id);
+  }
 
   // ── Chat ──────────────────────────────────────────────────────────────────
 
@@ -819,7 +859,7 @@ export function WorkspaceApp() {
       <section className="workspace">
 
         {/* Topbar */}
-        <header className="topbar">
+        <header className="topbar" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div className="topbar-left">
             <p className="eyebrow">import {"{ Knowledge }"} from "@you/memory"</p>
             <h1 className="topbar-title">
@@ -828,6 +868,52 @@ export function WorkspaceApp() {
                 : <><span>Microcosm</span></>}
             </h1>
           </div>
+
+          {activeWorkspaceId && (
+            <div className="neo-segmented-control" style={{
+              display: "flex",
+              gap: "8px",
+              border: "2px solid var(--border-strong)",
+              background: "var(--bg-soft)",
+              padding: "3px",
+              boxShadow: "2px 2px 0px var(--border-strong)",
+              borderRadius: "6px"
+            }}>
+              <button
+                onClick={() => setIsGraphView(false)}
+                style={{
+                  padding: "4px 12px",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "0.78rem",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  background: !isGraphView ? "var(--purple)" : "transparent",
+                  color: !isGraphView ? "white" : "var(--text-2)",
+                  fontWeight: !isGraphView ? "bold" : "normal"
+                }}
+              >
+                Editor
+              </button>
+              <button
+                onClick={() => setIsGraphView(true)}
+                style={{
+                  padding: "4px 12px",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "0.78rem",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  background: isGraphView ? "var(--purple)" : "transparent",
+                  color: isGraphView ? "white" : "var(--text-2)",
+                  fontWeight: isGraphView ? "bold" : "normal"
+                }}
+              >
+                Graph
+              </button>
+            </div>
+          )}
+
           <button className="primary-button">
             <Sparkles size={15} />
             Ask Companion
@@ -836,42 +922,124 @@ export function WorkspaceApp() {
 
         <div className="content-grid">
 
-          {/* ── EDITOR PANEL ──────────────────────────────────────────── */}
-          <div className="editor-panel">
-            {activePage ? (
-              <>
-                <div className="page-meta">
-                  <span>{activeWorkspace?.name ?? "Space"}</span>
-                  <span className="page-meta-sep">›</span>
-                  <span>{activeNotebook?.title ?? "Notebook"}</span>
-                  <span className="page-meta-sep">›</span>
-                  <span>{activeSection?.title ?? "Section"}</span>
-                  <span className="page-meta-sep">›</span>
-                  <strong>{activePage.title}</strong>
-                </div>
-                <MicrocosmEditor
-                  key={activePage.id}
-                  blocks={activePage.blocks}
-                  disabled={pageQuery.isLoading}
-                  isSaving={updatePageMutation.isPending}
-                  knowledgeStatus={activePage.knowledgeStatus}
-                  onSave={(blocks) => {
-                    const firstBlock = blocks[0];
-                    const newTitle =
-                      firstBlock && typeof firstBlock.content === "string" && firstBlock.content.trim()
-                        ? firstBlock.content.trim()
-                        : "Untitled Page";
-                    updatePageMutation.mutate({ title: newTitle, blocks });
-                  }}
-                />
-              </>
-            ) : (
-              <div className="editor-empty-state">
-                <Sparkles size={28} />
-                <h2>{hierarchyState}</h2>
-                <p>
-                  Microcosm needs a space, notebook, section, and page before the editor can save knowledge blocks.
-                </p>
+          {/* ── GRAPH OR EDITOR ──────────────────────────────────────────── */}
+          {isGraphView ? (
+            <div className="editor-panel" style={{ height: "100%", padding: "10px" }}>
+              <KnowledgeGraph
+                nodes={graphData.nodes}
+                edges={graphData.edges}
+                onNodeClick={handleGraphNodeClick}
+              />
+            </div>
+          ) : (
+            <div className="editor-panel">
+              {activePage ? (
+                <>
+                  <div className="page-meta">
+                    <span>{activeWorkspace?.name ?? "Space"}</span>
+                    <span className="page-meta-sep">›</span>
+                    <span>{activeNotebook?.title ?? "Notebook"}</span>
+                    <span className="page-meta-sep">›</span>
+                    <span>{activeSection?.title ?? "Section"}</span>
+                    <span className="page-meta-sep">›</span>
+                    <strong>{activePage.title}</strong>
+                  </div>
+
+                  {/* Display auto-tags */}
+                  {activePage.tags && activePage.tags.length > 0 && (
+                    <div className="page-tags-list" style={{ display: "flex", flexWrap: "wrap", gap: "6px", margin: "10px 0" }}>
+                      {activePage.tags.map((tag) => (
+                        <span key={tag} className="tag-chip" style={{
+                          fontSize: "0.75rem",
+                          fontFamily: "var(--font-mono)",
+                          background: "var(--bg-soft)",
+                          border: "1.5px solid var(--border-strong)",
+                          borderRadius: "4px",
+                          padding: "2px 8px",
+                          color: "var(--text-2)",
+                          boxShadow: "1px 1px 0px var(--border-strong)"
+                        }}>
+                          #{tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  <MicrocosmEditor
+                    key={activePage.id}
+                    blocks={activePage.blocks}
+                    disabled={pageQuery.isLoading}
+                    isSaving={updatePageMutation.isPending}
+                    knowledgeStatus={activePage.knowledgeStatus}
+                    onSave={(blocks) => {
+                      const firstBlock = blocks[0];
+                      const newTitle =
+                        firstBlock && typeof firstBlock.content === "string" && firstBlock.content.trim()
+                          ? firstBlock.content.trim()
+                          : "Untitled Page";
+                      updatePageMutation.mutate({ title: newTitle, blocks });
+                    }}
+                  />
+
+                  {/* Related Notes Footer panel */}
+                  {relatedPages.length > 0 && (
+                    <div className="related-notes-panel" style={{
+                      marginTop: "40px",
+                      borderTop: "2px dashed var(--border-strong)",
+                      paddingTop: "20px"
+                    }}>
+                      <h3 style={{
+                        fontFamily: "var(--font-mono)",
+                        fontSize: "0.85rem",
+                        textTransform: "lowercase",
+                        color: "var(--dim)",
+                        marginBottom: "12px"
+                      }}>
+                        // related notes
+                      </h3>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                        {relatedPages.map((relPage) => (
+                          <button
+                            key={relPage.id}
+                            onClick={() => handleNavigateToPage(relPage.id)}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "8px",
+                              padding: "6px 12px",
+                              background: "var(--bg-soft)",
+                              border: "1.5px solid var(--border-strong)",
+                              borderRadius: "6px",
+                              cursor: "pointer",
+                              width: "100%",
+                              textAlign: "left",
+                              fontFamily: "var(--font-mono)",
+                              fontSize: "0.82rem",
+                              boxShadow: "1.5px 1.5px 0px var(--border-strong)",
+                            }}
+                          >
+                            <FileText size={12} style={{ color: "var(--purple)" }} />
+                            <strong style={{ color: "var(--text-1)" }}>{relPage.title}</strong>
+                            <div style={{ display: "flex", gap: "4px", marginLeft: "auto" }}>
+                              {relPage.tags.map((t) => (
+                                <span key={t} style={{ fontSize: "0.65rem", padding: "1px 4px", border: "1px solid var(--border-strong)", borderRadius: "3px" }}>
+                                  #{t}
+                                </span>
+                              ))}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="editor-empty-state">
+                  <Sparkles size={28} />
+                  <h2>{hierarchyState}</h2>
+                  <p>
+                    Microcosm needs a space, notebook, section, and page before the editor can save knowledge blocks.
+                  </p>
                 <div className="empty-actions">
                   {workspaces.length === 0 && (
                     <button onClick={() => createWorkspaceMutation.mutate()} disabled={createWorkspaceMutation.isPending}>

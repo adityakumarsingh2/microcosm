@@ -69,7 +69,7 @@ export async function indexPage(page, notebookId, sectionId) {
 
 /**
  * Trigger indexing only if the page's knowledgeStatus is "pending".
- * Updates the page's knowledgeStatus in MongoDB based on the result.
+ * Updates the page's knowledgeStatus and tags in MongoDB based on the result.
  *
  * @param {object} page - Mongoose Page document
  */
@@ -78,12 +78,70 @@ export async function triggerIndexIfNeeded(page) {
 
   const result = await indexPage(page, page.notebookId, page.sectionId);
 
+  // Extract tags from page blocks if indexing succeeded
+  let tags = [];
+  if (result.success && page.blocks && page.blocks.length > 0) {
+    try {
+      const textContent = page.blocks
+        .map((b) => (typeof b.content === "string" ? b.content : ""))
+        .filter(Boolean)
+        .join("\n");
+
+      if (textContent.trim()) {
+        const response = await fetch(`${AI_SERVICE_URL}/internal/v1/index/analyze/tags`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-internal-token": INTERNAL_TOKEN,
+          },
+          body: JSON.stringify({ text: textContent }),
+        });
+
+        if (response.ok) {
+          const resJson = await response.json();
+          tags = resJson.tags || [];
+        }
+      }
+    } catch (tagErr) {
+      console.error("[KnowledgeService] Failed to extract tags:", tagErr.message);
+    }
+  }
+
   // Update knowledgeStatus in the DB — use updateOne to avoid stale-state issues
   const { Page } = await import("../pages/page.model.js");
   await Page.updateOne(
     { _id: page._id },
     {
       knowledgeStatus: result.success ? "indexed" : "failed",
+      tags: tags,
     }
   );
 }
+
+/**
+ * Call the Python AI service to get pages semantically related to a given page.
+ */
+export async function getRelatedPagesFromAi(pageId, workspaceId) {
+  try {
+    const response = await fetch(
+      `${AI_SERVICE_URL}/internal/v1/index/page/${pageId}/related?workspaceId=${workspaceId}`,
+      {
+        method: "GET",
+        headers: {
+          "x-internal-token": INTERNAL_TOKEN,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      return [];
+    }
+
+    const data = await response.json();
+    return data.related || []; // returns list of { pageId, score }
+  } catch (err) {
+    console.error("[KnowledgeService] Error fetching related pages:", err.message);
+    return [];
+  }
+}
+
