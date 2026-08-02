@@ -255,6 +255,126 @@ class QdrantService:
             for r in results
         ]
 
+    def get_related_pages(self, page_id: str, workspace_id: str) -> List[Dict[str, Any]]:
+        """
+        Find other pages in the same workspace that are semantically close to this page.
+        """
+        try:
+            client = self._get_client()
+            # 1. Fetch points for the given pageId to get its vector
+            points, _ = client.scroll(
+                collection_name=COLLECTION_NAME,
+                scroll_filter=Filter(
+                    must=[
+                        FieldCondition(
+                            key="pageId",
+                            match=MatchValue(value=page_id),
+                        )
+                    ]
+                ),
+                limit=1,
+                with_vectors=True,
+            )
+
+            if not points or not points[0].vector:
+                logger.info(f"No indexed vectors found for page {page_id}")
+                return []
+
+            # 2. Search for similar points in the same workspace (excluding the page itself)
+            query_vector = points[0].vector
+
+            search_results = client.query_points(
+                collection_name=COLLECTION_NAME,
+                query=query_vector,
+                query_filter=Filter(
+                    must=[
+                        FieldCondition(key="workspaceId", match=MatchValue(value=workspace_id))
+                    ],
+                    must_not=[
+                        FieldCondition(key="pageId", match=MatchValue(value=page_id))
+                    ]
+                ),
+                limit=15,
+                with_payload=True,
+            ).points
+
+            # 3. Aggregate unique similar pageIds
+            seen = set()
+            related = []
+            for r in search_results:
+                pid = r.payload.get("pageId") or r.payload.get("documentId")
+                if pid and pid != page_id and pid not in seen:
+                    seen.add(pid)
+                    related.append({
+                        "pageId": pid,
+                        "score": r.score
+                    })
+            return related[:5]
+        except Exception as e:
+            logger.warning(f"Error fetching related pages: {e}")
+            return []
+
+    def get_workspace_graph_similarities(self, node_ids: List[str]) -> List[Dict[str, Any]]:
+        """
+        Calculate pair-wise semantic similarities among workspace node ids and return connections.
+        """
+        try:
+            client = self._get_client()
+            node_vectors = {}
+            for nid in node_ids:
+                points, _ = client.scroll(
+                    collection_name=COLLECTION_NAME,
+                    scroll_filter=Filter(
+                        must=[
+                            FieldCondition(
+                                key="pageId",
+                                match=MatchValue(value=nid),
+                            )
+                        ]
+                    ),
+                    limit=1,
+                    with_vectors=True,
+                )
+                if not points:
+                    points, _ = client.scroll(
+                        collection_name=COLLECTION_NAME,
+                        scroll_filter=Filter(
+                            must=[
+                                FieldCondition(
+                                    key="documentId",
+                                    match=MatchValue(value=nid),
+                                )
+                            ]
+                        ),
+                        limit=1,
+                        with_vectors=True,
+                    )
+                if points and points[0].vector:
+                    node_vectors[nid] = points[0].vector
+
+            # Compute similarities pairwise
+            edges = []
+            nids_list = list(node_vectors.keys())
+
+            def cosine_similarity(v1, v2):
+                return sum(x * y for x, y in zip(v1, v2))
+
+            for i in range(len(nids_list)):
+                for j in range(i + 1, len(nids_list)):
+                    nid1 = nids_list[i]
+                    nid2 = nids_list[j]
+                    score = cosine_similarity(node_vectors[nid1], node_vectors[nid2])
+                    if score > 0.80:
+                        edges.append({
+                            "source": nid1,
+                            "target": nid2,
+                            "score": score
+                        })
+            return edges
+        except Exception as e:
+            logger.warning(f"Error computing workspace graph: {e}")
+            return []
+
     @property
     def is_configured(self) -> bool:
         return bool(os.getenv("QDRANT_URL", ""))

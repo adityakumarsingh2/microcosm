@@ -33,12 +33,12 @@ app.use("/uploads", express.static("uploads"));
 app.use("/api/v1/health", healthRouter);
 app.use("/api/v1/auth", authRouter);
 app.use("/api/v1/workspaces", workspaceRouter);
+app.use("/api/v1", documentRouter);
 app.use("/api/v1", notebookRouter);
 app.use("/api/v1", sectionRouter);
 app.use("/api/v1", pageRouter);
 app.use("/api/v1", companionRouter);
 app.use("/api/v1", uploadsRouter);
-app.use("/api/v1", documentRouter);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

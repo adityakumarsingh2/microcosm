@@ -2,7 +2,7 @@ import { AppError } from "../../shared/errors/app-error.js";
 import { isValidObjectId } from "../../shared/utils/object-id.js";
 import { sectionService } from "../sections/section.service.js";
 import { Page } from "./page.model.js";
-import { triggerIndexIfNeeded } from "../knowledge/knowledge.service.js";
+import { triggerIndexIfNeeded, getRelatedPagesFromAi } from "../knowledge/knowledge.service.js";
 
 class PageService {
   async list(userId, sectionId) {
@@ -76,6 +76,44 @@ class PageService {
     page.status = "archived";
     await page.save();
     return page.toJSONView();
+  }
+
+  async getRelated(userId, pageId) {
+    const page = await this.getOwnedPage(userId, pageId);
+
+    // 1. Get semantic recommendations from AI
+    const aiRelated = await getRelatedPagesFromAi(pageId, page.workspaceId.toString());
+    const aiRelatedIds = aiRelated.map((r) => r.pageId);
+
+    // 2. Fetch page documents from MongoDB
+    let pages = [];
+    if (aiRelatedIds.length > 0) {
+      pages = await Page.find({
+        _id: { $in: aiRelatedIds },
+        status: "active",
+      });
+    }
+
+    // 3. Fallback/Supplement: Shared tags recommendations
+    if (pages.length < 5 && page.tags && page.tags.length > 0) {
+      const existingIds = new Set([pageId, ...pages.map((p) => p._id.toString())]);
+      const tagMatches = await Page.find({
+        workspaceId: page.workspaceId,
+        _id: { $nin: Array.from(existingIds) },
+        tags: { $in: page.tags },
+        status: "active",
+      }).limit(5 - pages.length);
+
+      pages = [...pages, ...tagMatches];
+    }
+
+    return pages.map((p) => ({
+      id: p._id.toString(),
+      title: p.title,
+      tags: p.tags || [],
+      notebookId: p.notebookId.toString(),
+      sectionId: p.sectionId.toString(),
+    }));
   }
 }
 

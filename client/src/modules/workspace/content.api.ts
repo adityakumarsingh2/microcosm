@@ -158,3 +158,54 @@ export function deletePage(token: string, pageId: string) {
     token,
   });
 }
+
+export type RelatedPage = {
+  id: string;
+  title: string;
+  tags: string[];
+  notebookId?: string;
+  sectionId?: string;
+};
+
+export type GraphNode = {
+  id: string;
+  label: string;
+  type: "page" | "document";
+  tags: string[];
+  notebookId?: string;
+  sectionId?: string;
+};
+
+export type GraphEdge = {
+  from: string;
+  to: string;
+  label: string;
+  type: "tag" | "semantic";
+};
+
+type RelatedPagesResponse = {
+  success: true;
+  data: {
+    related: RelatedPage[];
+  };
+};
+
+type WorkspaceGraphResponse = {
+  success: true;
+  data: {
+    nodes: GraphNode[];
+    edges: GraphEdge[];
+  };
+};
+
+export function getRelatedPages(token: string, pageId: string) {
+  return apiRequest<RelatedPagesResponse>(`/pages/${pageId}/related`, {
+    token,
+  });
+}
+
+export function getWorkspaceGraph(token: string, workspaceId: string) {
+  return apiRequest<WorkspaceGraphResponse>(`/workspaces/${workspaceId}/graph`, {
+    token,
+  });
+}

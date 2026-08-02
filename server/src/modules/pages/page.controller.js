@@ -1,4 +1,4 @@
-﻿import { sendSuccess } from "../../shared/responses/api-response.js";
+import { sendSuccess } from "../../shared/responses/api-response.js";
 import { pageService } from "./page.service.js";
 
 export async function listPages(req, res) {
@@ -24,4 +24,9 @@ export async function updatePage(req, res) {
 export async function deletePage(req, res) {
   const page = await pageService.archive(req.user._id, req.params.pageId);
   return sendSuccess(res, { page }, 200, "Page archived");
+}
+
+export async function getRelatedPages(req, res) {
+  const related = await pageService.getRelated(req.user._id, req.params.pageId);
+  return sendSuccess(res, { related });
 }
