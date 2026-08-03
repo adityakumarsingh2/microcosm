@@ -54,6 +54,8 @@ import type { Source } from "./companion.api";
 import { CitationBadge } from "./CitationBadge";
 import { listDocuments, uploadDocument, deleteDocument } from "../documents/document.api";
 import { KnowledgeGraph } from "./KnowledgeGraph";
+import { generateFlashcards as apiGenerateFlashcards } from "../study/study.api";
+import { StudyView } from "./StudyView";
 
 const emptyBlocks: PageBlock[] = [];
 
@@ -150,7 +152,7 @@ export function WorkspaceApp() {
   const [chatHistory, setChatHistory] = useState<{ role: "user" | "ai"; content: string; sources?: Source[] }[]>([]);
   const [chatInput, setChatInput] = useState("");
   const chatBottomRef = useRef<HTMLDivElement>(null);
-  const [isGraphView, setIsGraphView] = useState(false);
+  const [viewMode, setViewMode] = useState<"editor" | "graph" | "study">("editor");
   const [copiedMessageIndex, setCopiedMessageIndex] = useState<number | null>(null);
   const [insertedMessageIndex, setInsertedMessageIndex] = useState<number | null>(null);
 
@@ -326,7 +328,7 @@ export function WorkspaceApp() {
   const graphQuery = useQuery({
     queryKey: ["graph", activeWorkspaceId],
     queryFn: () => getWorkspaceGraph(accessToken!, activeWorkspaceId!),
-    enabled: Boolean(accessToken && activeWorkspaceId && isGraphView),
+    enabled: Boolean(accessToken && activeWorkspaceId && viewMode === "graph"),
   });
   const graphData = graphQuery.data?.data ?? { nodes: [], edges: [] };
 
@@ -337,6 +339,17 @@ export function WorkspaceApp() {
   });
   const relatedPages = relatedPagesQuery.data?.data.related ?? [];
 
+  const generateFlashcardsMutation = useMutation({
+    mutationFn: () => apiGenerateFlashcards(accessToken!, activePageId!),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["dueCards", activeWorkspaceId] });
+      alert("Flashcards generated successfully! Switch to the 'Study' tab to review them.");
+    },
+    onError: (err) => {
+      alert(`Failed to generate flashcards: ${err instanceof Error ? err.message : "unknown error"}`);
+    },
+  });
+
   function handleGraphNodeClick(nodeId: string) {
     const node = graphData.nodes.find((n) => n.id === nodeId);
     if (!node || node.type !== "page") return;
@@ -344,7 +357,7 @@ export function WorkspaceApp() {
     if (node.notebookId) setActiveNotebookId(node.notebookId);
     if (node.sectionId) setActiveSectionId(node.sectionId);
     setActivePageId(node.id);
-    setIsGraphView(false); // Switch to editor view
+    setViewMode("editor"); // Switch to editor view
   }
 
   function handleNavigateToPage(pageId: string) {
@@ -354,6 +367,7 @@ export function WorkspaceApp() {
     if (relPage.notebookId) setActiveNotebookId(relPage.notebookId);
     if (relPage.sectionId) setActiveSectionId(relPage.sectionId);
     setActivePageId(relPage.id);
+    setViewMode("editor");
   }
 
   // ── Chat ──────────────────────────────────────────────────────────────────
@@ -880,7 +894,7 @@ export function WorkspaceApp() {
               borderRadius: "6px"
             }}>
               <button
-                onClick={() => setIsGraphView(false)}
+                onClick={() => setViewMode("editor")}
                 style={{
                   padding: "4px 12px",
                   fontFamily: "var(--font-mono)",
@@ -888,15 +902,15 @@ export function WorkspaceApp() {
                   border: "none",
                   borderRadius: "4px",
                   cursor: "pointer",
-                  background: !isGraphView ? "var(--purple)" : "transparent",
-                  color: !isGraphView ? "white" : "var(--text-2)",
-                  fontWeight: !isGraphView ? "bold" : "normal"
+                  background: viewMode === "editor" ? "var(--purple)" : "transparent",
+                  color: viewMode === "editor" ? "white" : "var(--text-2)",
+                  fontWeight: viewMode === "editor" ? "bold" : "normal"
                 }}
               >
                 Editor
               </button>
               <button
-                onClick={() => setIsGraphView(true)}
+                onClick={() => setViewMode("graph")}
                 style={{
                   padding: "4px 12px",
                   fontFamily: "var(--font-mono)",
@@ -904,12 +918,28 @@ export function WorkspaceApp() {
                   border: "none",
                   borderRadius: "4px",
                   cursor: "pointer",
-                  background: isGraphView ? "var(--purple)" : "transparent",
-                  color: isGraphView ? "white" : "var(--text-2)",
-                  fontWeight: isGraphView ? "bold" : "normal"
+                  background: viewMode === "graph" ? "var(--purple)" : "transparent",
+                  color: viewMode === "graph" ? "white" : "var(--text-2)",
+                  fontWeight: viewMode === "graph" ? "bold" : "normal"
                 }}
               >
                 Graph
+              </button>
+              <button
+                onClick={() => setViewMode("study")}
+                style={{
+                  padding: "4px 12px",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "0.78rem",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  background: viewMode === "study" ? "var(--purple)" : "transparent",
+                  color: viewMode === "study" ? "white" : "var(--text-2)",
+                  fontWeight: viewMode === "study" ? "bold" : "normal"
+                }}
+              >
+                Study
               </button>
             </div>
           )}
@@ -922,8 +952,8 @@ export function WorkspaceApp() {
 
         <div className="content-grid">
 
-          {/* ── GRAPH OR EDITOR ──────────────────────────────────────────── */}
-          {isGraphView ? (
+          {/* ── GRAPH OR STUDY OR EDITOR ──────────────────────────────────────────── */}
+          {viewMode === "graph" ? (
             <div className="editor-panel" style={{ height: "100%", padding: "10px" }}>
               <KnowledgeGraph
                 nodes={graphData.nodes}
@@ -931,18 +961,47 @@ export function WorkspaceApp() {
                 onNodeClick={handleGraphNodeClick}
               />
             </div>
+          ) : viewMode === "study" ? (
+            <StudyView
+              accessToken={accessToken!}
+              workspaceId={activeWorkspaceId!}
+            />
           ) : (
             <div className="editor-panel">
               {activePage ? (
                 <>
-                  <div className="page-meta">
-                    <span>{activeWorkspace?.name ?? "Space"}</span>
-                    <span className="page-meta-sep">›</span>
-                    <span>{activeNotebook?.title ?? "Notebook"}</span>
-                    <span className="page-meta-sep">›</span>
-                    <span>{activeSection?.title ?? "Section"}</span>
-                    <span className="page-meta-sep">›</span>
-                    <strong>{activePage.title}</strong>
+                  <div className="page-meta" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div>
+                      <span>{activeWorkspace?.name ?? "Space"}</span>
+                      <span className="page-meta-sep">›</span>
+                      <span>{activeNotebook?.title ?? "Notebook"}</span>
+                      <span className="page-meta-sep">›</span>
+                      <span>{activeSection?.title ?? "Section"}</span>
+                      <span className="page-meta-sep">›</span>
+                      <strong>{activePage.title}</strong>
+                    </div>
+
+                    <button
+                      onClick={() => generateFlashcardsMutation.mutate()}
+                      disabled={generateFlashcardsMutation.isPending}
+                      style={{
+                        padding: "4px 10px",
+                        fontFamily: "var(--font-mono)",
+                        fontSize: "0.74rem",
+                        background: "var(--bg-card)",
+                        border: "1.5px solid var(--border-strong)",
+                        borderRadius: "4px",
+                        cursor: "pointer",
+                        fontWeight: "bold",
+                        boxShadow: "1.5px 1.5px 0px var(--border-strong)",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px"
+                      }}
+                    >
+                      <Zap size={10} style={{ color: "var(--purple)" }} />
+                      {generateFlashcardsMutation.isPending ? "Generating..." : "Generate Study Deck"}
+                    </button>
                   </div>
 
                   {/* Display auto-tags */}
@@ -1040,32 +1099,32 @@ export function WorkspaceApp() {
                   <p>
                     Microcosm needs a space, notebook, section, and page before the editor can save knowledge blocks.
                   </p>
-                <div className="empty-actions">
-                  {workspaces.length === 0 && (
-                    <button onClick={() => createWorkspaceMutation.mutate()} disabled={createWorkspaceMutation.isPending}>
-                      <Plus size={13} /> Create space
-                    </button>
-                  )}
-                  {activeWorkspaceId && notebooks.length === 0 && (
-                    <button onClick={() => createNotebookMutation.mutate()} disabled={createNotebookMutation.isPending}>
-                      <Plus size={13} /> Create notebook
-                    </button>
-                  )}
-                  {activeNotebookId && sections.length === 0 && (
-                    <button onClick={() => createSectionMutation.mutate()} disabled={createSectionMutation.isPending}>
-                      <Plus size={13} /> Create section
-                    </button>
-                  )}
-                  {activeSectionId && pages.length === 0 && (
-                    <button onClick={() => createPageMutation.mutate()} disabled={createPageMutation.isPending}>
-                      <Plus size={13} /> Create page
-                    </button>
-                  )}
+                  <div className="empty-actions">
+                    {workspaces.length === 0 && (
+                      <button onClick={() => createWorkspaceMutation.mutate()} disabled={createWorkspaceMutation.isPending}>
+                        <Plus size={13} /> Create space
+                      </button>
+                    )}
+                    {activeWorkspaceId && notebooks.length === 0 && (
+                      <button onClick={() => createNotebookMutation.mutate()} disabled={createNotebookMutation.isPending}>
+                        <Plus size={13} /> Create notebook
+                      </button>
+                    )}
+                    {activeNotebookId && sections.length === 0 && (
+                      <button onClick={() => createSectionMutation.mutate()} disabled={createSectionMutation.isPending}>
+                        <Plus size={13} /> Create section
+                      </button>
+                    )}
+                    {activeSectionId && pages.length === 0 && (
+                      <button onClick={() => createPageMutation.mutate()} disabled={createPageMutation.isPending}>
+                        <Plus size={13} /> Create page
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
-        )}
+              )}
+            </div>
+          )}
 
           {/* ── AI COMPANION ──────────────────────────────────────────── */}
           <aside className="neo-panel">
