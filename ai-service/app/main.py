@@ -10,6 +10,7 @@ from app.api.chat import router as chat_router
 from app.api.index import router as index_router
 from app.api.document import router as document_router
 from app.api.analysis import router as analysis_router
+from app.api.synthesis import router as synthesis_router
 from app.services.qdrant_service import qdrant_service
 
 logging.basicConfig(level=logging.INFO)
@@ -45,3 +46,4 @@ app.include_router(chat_router, prefix="/internal/v1", tags=["chat"])
 app.include_router(index_router, prefix="/internal/v1/index", tags=["index"])
 app.include_router(document_router, prefix="/internal/v1/index", tags=["document"])
 app.include_router(analysis_router, prefix="/internal/v1/index", tags=["analysis"])
+app.include_router(synthesis_router, prefix="/internal/v1/index", tags=["synthesis"])
