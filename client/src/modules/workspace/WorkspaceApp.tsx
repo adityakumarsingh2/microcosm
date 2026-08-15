@@ -1,20 +1,18 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import ReactMarkdown from "react-markdown";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  BookOpen,
   Bot,
   ChevronDown,
   FileText,
   Folder,
   Home,
-  Image,
   Layers3,
   LogOut,
   Plus,
   Search,
-  SendHorizontal,
+  Send,
   Settings,
   Sparkles,
   Edit2,
@@ -24,6 +22,11 @@ import {
   PlusSquare,
   RotateCcw,
   Check,
+  Loader2,
+  X,
+  User,
+  MessageSquare,
+  BookOpen,
 } from "lucide-react";
 import { useAuth } from "../auth/AuthProvider";
 import { MicrocosmEditor } from "../editor/MicrocosmEditor";
@@ -56,6 +59,7 @@ import { listDocuments, uploadDocument, deleteDocument } from "../documents/docu
 import { KnowledgeGraph } from "./KnowledgeGraph";
 import { generateFlashcards as apiGenerateFlashcards } from "../study/study.api";
 import { StudyView } from "./StudyView";
+import { MayIHelpYouPopup } from "../../shared/MayIHelpYouPopup";
 
 const emptyBlocks: PageBlock[] = [];
 
@@ -97,18 +101,28 @@ const onboardingBlocks: PageBlock[] = [
   },
 ];
 
+// ── Onboarding overlay ────────────────────────────────────────────────────
 function OnboardingOverlay({ onStart, isPending }: { onStart: (name: string) => void; isPending: boolean }) {
   const [name, setName] = useState("Personal");
   return (
-    <div className="onboarding-overlay">
-      <div className="onboarding-card">
-        <div className="onboarding-icon">
-          <Sparkles size={26} />
+    <div className="fixed inset-0 flex items-center justify-center bg-background/90 backdrop-blur-sm z-50 font-sans">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+        className="w-full max-w-sm p-8 bg-card border-2 border-foreground text-foreground"
+        style={{ boxShadow: "8px 8px 0px 0px rgba(255,255,255,0.12)" }}
+      >
+        <div className="flex items-center justify-center w-12 h-12 mb-6 border-2 border-foreground text-[hsl(var(--orange))]">
+          <Sparkles size={22} />
         </div>
-        <h2>Welcome to Microcosm</h2>
-        <p>Let's set up your first notebook. What area of knowledge will you start with?</p>
+        <h2 className="font-serif text-2xl font-bold mb-2 text-foreground">Welcome to Microcosm</h2>
+        <p className="text-sm text-muted-foreground mb-6 leading-relaxed">
+          Let's set up your first notebook. What area of knowledge will you start with?
+        </p>
         <input
-          className="onboarding-input"
+          className="w-full bg-background border-2 border-foreground/25 focus:border-foreground px-3 py-2.5
+                     text-sm text-foreground placeholder:text-muted-foreground outline-none mb-4 transition-colors"
           value={name}
           onChange={(e) => setName(e.target.value)}
           autoFocus
@@ -117,43 +131,159 @@ function OnboardingOverlay({ onStart, isPending }: { onStart: (name: string) => 
           placeholder="e.g. Personal, Engineering, Research…"
         />
         <button
-          className="primary-button onboarding-button"
+          className="flex items-center justify-center gap-2 w-full min-h-[42px] px-6
+                     bg-foreground text-background border-2 border-foreground font-bold text-sm
+                     hover:bg-secondary hover:text-foreground disabled:opacity-40
+                     hover:-translate-y-0.5 active:translate-y-0 transition-all"
+          style={{ boxShadow: "3px 3px 0px 0px rgba(255,255,255,0.15)" }}
           onClick={() => onStart(name)}
           disabled={isPending}
         >
           {isPending ? (
-            <>
-              <span>Setting up...</span>
-            </>
+            <><Loader2 size={14} className="animate-spin" /> Setting up…</>
           ) : (
-            <>
-              <Sparkles size={15} />
-              <span>Get Started</span>
-            </>
+            <><Sparkles size={14} /> Get Started</>
           )}
         </button>
-      </div>
+      </motion.div>
     </div>
   );
 }
 
+// ── Welcome sequence for AI Companion (matching portfolio RAGChatWidget) ──
+const COMPANION_SUGGESTIONS = {
+  workspace: [
+    { label: "Explain my recent notes", icon: <FileText size={12} /> },
+    { label: "What did I write about this week?", icon: <Sparkles size={12} /> },
+    { label: "What are the key insights in my space?", icon: <Bot size={12} /> },
+  ],
+  notebook: [
+    { label: "Summarize this notebook", icon: <BookOpen size={12} /> },
+    { label: "Find connections across pages", icon: <Sparkles size={12} /> },
+    { label: "What are the action items here?", icon: <Bot size={12} /> },
+  ],
+  page: [
+    { label: "Summarize this page", icon: <FileText size={12} /> },
+    { label: "Find key concepts", icon: <Sparkles size={12} /> },
+    { label: "Create a study quiz from this page", icon: <Bot size={12} /> },
+  ],
+};
+
+const GREETING_DELAY    = 300;
+const LABEL_DELAY       = 1000;
+const FIRST_CHIP_DELAY  = 1300;
+const CHIP_STAGGER      = 180;
+
+const CompanionWelcomeSequence = React.memo(function CompanionWelcomeSequence({
+  chatScope,
+  onSend,
+}: {
+  chatScope: "workspace" | "notebook" | "page";
+  onSend: (text: string) => void;
+}) {
+  const [showGreeting, setShowGreeting]   = useState(false);
+  const [showLabel, setShowLabel]         = useState(false);
+  const [visibleChips, setVisibleChips]   = useState(0);
+  const suggestions = COMPANION_SUGGESTIONS[chatScope];
+
+  useEffect(() => {
+    const t1 = setTimeout(() => setShowGreeting(true), GREETING_DELAY);
+    const t2 = setTimeout(() => setShowLabel(true), LABEL_DELAY);
+    const chipTimers = suggestions.map((_, i) =>
+      setTimeout(() => setVisibleChips(i + 1), FIRST_CHIP_DELAY + i * CHIP_STAGGER)
+    );
+    return () => {
+      clearTimeout(t1); clearTimeout(t2);
+      chipTimers.forEach(clearTimeout);
+    };
+  }, [suggestions]);
+
+  return (
+    <div className="space-y-3">
+      {/* Greeting bubble */}
+      <AnimatePresence>
+        {showGreeting && (
+          <motion.div
+            className="flex items-start gap-2.5"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
+          >
+            <div className="w-7 h-7 bg-secondary border border-foreground flex items-center justify-center text-xs flex-shrink-0"
+                 style={{ boxShadow: "1px 1px 0px rgba(255,255,255,0.1)" }}>
+              <Bot className="w-3.5 h-3.5" />
+            </div>
+            <div className="px-3.5 py-2.5 border bg-secondary text-foreground border-foreground/20
+                            rounded-xl rounded-tl-none text-sm leading-relaxed max-w-[75%] font-sans font-normal">
+              Hi! I'm your AI Companion. Ask me anything about your{" "}
+              {chatScope === "workspace" ? "workspace" : chatScope === "notebook" ? "active notebook" : "active page"}.
+              📚
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Label */}
+      <AnimatePresence>
+        {showLabel && (
+          <motion.p
+            className="text-[11px] text-muted-foreground font-mono flex items-center gap-1 pt-1"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.25 }}
+          >
+            <Sparkles className="w-3 h-3 text-yellow-500 animate-pulse" />
+            SUGGESTED QUERIES:
+          </motion.p>
+        )}
+      </AnimatePresence>
+
+      {/* Suggestion chips */}
+      <div className="flex flex-col gap-2">
+        {suggestions.map((sug, i) => (
+          <AnimatePresence key={sug.label}>
+            {visibleChips > i && (
+              <motion.button
+                onClick={() => onSend(sug.label)}
+                className="text-xs font-mono text-left px-3 py-2 border border-foreground/20
+                           bg-card hover:bg-secondary hover:border-foreground/40
+                           hover:-translate-y-px transition-all duration-200 text-foreground"
+                style={{ boxShadow: "1px 1px 0px rgba(255,255,255,0.08)" }}
+                initial={{ opacity: 0, x: -12 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+              >
+                <span className="text-blue-400 mr-1.5">{">"}</span>
+                {sug.label}
+              </motion.button>
+            )}
+          </AnimatePresence>
+        ))}
+      </div>
+    </div>
+  );
+});
+
+// ── Main WorkspaceApp ─────────────────────────────────────────────────────
 export function WorkspaceApp() {
   const queryClient = useQueryClient();
   const { accessToken, logout, user } = useAuth();
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
-  const [activeNotebookId, setActiveNotebookId] = useState<string | null>(null);
-  const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
-  const [activePageId, setActivePageId] = useState<string | null>(null);
-  const [renamingItemId, setRenamingItemId] = useState<string | null>(null);
-  const [renameDraft, setRenameDraft] = useState("");
+  const [activeNotebookId, setActiveNotebookId]   = useState<string | null>(null);
+  const [activeSectionId, setActiveSectionId]     = useState<string | null>(null);
+  const [activePageId, setActivePageId]           = useState<string | null>(null);
+  const [renamingItemId, setRenamingItemId]       = useState<string | null>(null);
+  const [renameDraft, setRenameDraft]             = useState("");
 
   // Companion state
-  const [chatScope, setChatScope] = useState<"workspace" | "notebook" | "page">("workspace");
+  const [chatScope, setChatScope]     = useState<"workspace" | "notebook" | "page">("workspace");
   const [chatHistory, setChatHistory] = useState<{ role: "user" | "ai"; content: string; sources?: Source[] }[]>([]);
-  const [chatInput, setChatInput] = useState("");
-  const chatBottomRef = useRef<HTMLDivElement>(null);
-  const [viewMode, setViewMode] = useState<"editor" | "graph" | "study">("editor");
-  const [copiedMessageIndex, setCopiedMessageIndex] = useState<number | null>(null);
+  const [chatInput, setChatInput]     = useState("");
+  const [companionOpen, setCompanionOpen] = useState(true);
+  const chatBodyRef    = useRef<HTMLDivElement>(null);
+  const chatInputRef   = useRef<HTMLInputElement>(null);
+  const [viewMode, setViewMode]       = useState<"editor" | "graph" | "study">("editor");
+  const [copiedMessageIndex, setCopiedMessageIndex]   = useState<number | null>(null);
   const [insertedMessageIndex, setInsertedMessageIndex] = useState<number | null>(null);
 
   const handleCopyMessage = (text: string, index: number) => {
@@ -169,40 +299,14 @@ export function WorkspaceApp() {
   };
 
   useEffect(() => {
-    if (!activePageId && chatScope === "page") {
-      setChatScope("workspace");
-    }
+    if (!activePageId && chatScope === "page") setChatScope("workspace");
   }, [activePageId, chatScope]);
 
   useEffect(() => {
-    if (!activeNotebookId && chatScope === "notebook") {
-      setChatScope("workspace");
-    }
+    if (!activeNotebookId && chatScope === "notebook") setChatScope("workspace");
   }, [activeNotebookId, chatScope]);
 
-  const suggestions = useMemo(() => {
-    if (chatScope === "page") {
-      return [
-        { label: "Summarize this page", icon: <FileText size={12} /> },
-        { label: "Find key concepts", icon: <Sparkles size={12} /> },
-        { label: "Create a study quiz from this page", icon: <Bot size={12} /> },
-      ];
-    }
-    if (chatScope === "notebook") {
-      return [
-        { label: "Summarize this notebook", icon: <BookOpen size={12} /> },
-        { label: "Find connections across pages", icon: <Sparkles size={12} /> },
-        { label: "What are the action items here?", icon: <Bot size={12} /> },
-      ];
-    }
-    return [
-      { label: "Explain my recent notes", icon: <FileText size={12} /> },
-      { label: "What did I write about this week?", icon: <Sparkles size={12} /> },
-      { label: "What are the key insights in my space?", icon: <Bot size={12} /> },
-    ];
-  }, [chatScope]);
-
-  // Document state & upload logic
+  // Document state
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const documentsQuery = useQuery({
@@ -211,40 +315,28 @@ export function WorkspaceApp() {
     enabled: Boolean(accessToken && activeWorkspaceId),
     refetchInterval: (query) => {
       const docs = query.state.data?.data.documents ?? [];
-      const hasPending = docs.some(
-        (d) => d.status === "pending" || d.status === "processing"
-      );
-      return hasPending ? 3000 : false;
+      return docs.some((d) => d.status === "pending" || d.status === "processing") ? 3000 : false;
     },
   });
   const documents = documentsQuery.data?.data.documents ?? [];
 
   const uploadDocumentMutation = useMutation({
     mutationFn: (file: File) => uploadDocument(accessToken!, activeWorkspaceId!, file),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["documents", activeWorkspaceId] });
-    },
-    onError: (err) => {
-      alert(`Failed to upload document: ${err instanceof Error ? err.message : "unknown error"}`);
-    },
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["documents", activeWorkspaceId] }),
+    onError: (err) => alert(`Failed to upload: ${err instanceof Error ? err.message : "unknown"}`),
   });
 
   const deleteDocumentMutation = useMutation({
     mutationFn: (id: string) => deleteDocument(accessToken!, id),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["documents", activeWorkspaceId] });
-    },
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["documents", activeWorkspaceId] }),
   });
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.type !== "application/pdf") {
-      alert("Only PDF files are supported.");
-      return;
-    }
+    if (file.type !== "application/pdf") { alert("Only PDF files are supported."); return; }
     uploadDocumentMutation.mutate(file);
-    e.target.value = ""; // clear file select
+    e.target.value = "";
   }
 
   function startRenaming(id: string, currentTitle: string) {
@@ -252,14 +344,13 @@ export function WorkspaceApp() {
     setRenameDraft(currentTitle);
   }
 
-  // ── Queries ────────────────────────────────────────────────────────────────
+  // ── Queries ──────────────────────────────────────────────────────────────
 
   const workspacesQuery = useQuery({
     queryKey: ["workspaces"],
     queryFn: () => listWorkspaces(accessToken!),
     enabled: Boolean(accessToken),
   });
-
   const workspaces = workspacesQuery.data?.data.workspaces ?? [];
 
   useEffect(() => {
@@ -271,16 +362,13 @@ export function WorkspaceApp() {
     queryFn: () => listNotebooks(accessToken!, activeWorkspaceId!),
     enabled: Boolean(accessToken && activeWorkspaceId),
   });
-
   const notebooks = notebooksQuery.data?.data.notebooks ?? [];
 
   useEffect(() => {
     if (notebooks[0] && !notebooks.some((n) => n.id === activeNotebookId))
       setActiveNotebookId(notebooks[0].id);
     if (notebooks.length === 0) {
-      setActiveNotebookId(null);
-      setActiveSectionId(null);
-      setActivePageId(null);
+      setActiveNotebookId(null); setActiveSectionId(null); setActivePageId(null);
     }
   }, [activeNotebookId, notebooks]);
 
@@ -289,16 +377,12 @@ export function WorkspaceApp() {
     queryFn: () => listSections(accessToken!, activeNotebookId!),
     enabled: Boolean(accessToken && activeNotebookId),
   });
-
   const sections = sectionsQuery.data?.data.sections ?? [];
 
   useEffect(() => {
     if (sections[0] && !sections.some((s) => s.id === activeSectionId))
       setActiveSectionId(sections[0].id);
-    if (sections.length === 0) {
-      setActiveSectionId(null);
-      setActivePageId(null);
-    }
+    if (sections.length === 0) { setActiveSectionId(null); setActivePageId(null); }
   }, [activeSectionId, sections]);
 
   const pagesQuery = useQuery({
@@ -306,7 +390,6 @@ export function WorkspaceApp() {
     queryFn: () => listPages(accessToken!, activeSectionId!),
     enabled: Boolean(accessToken && activeSectionId),
   });
-
   const pages = pagesQuery.data?.data.pages ?? [];
 
   useEffect(() => {
@@ -343,27 +426,23 @@ export function WorkspaceApp() {
     mutationFn: () => apiGenerateFlashcards(accessToken!, activePageId!),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["dueCards", activeWorkspaceId] });
-      alert("Flashcards generated successfully! Switch to the 'Study' tab to review them.");
+      alert("Flashcards generated! Switch to the 'Study' tab to review them.");
     },
-    onError: (err) => {
-      alert(`Failed to generate flashcards: ${err instanceof Error ? err.message : "unknown error"}`);
-    },
+    onError: (err) => alert(`Failed: ${err instanceof Error ? err.message : "unknown"}`),
   });
 
   function handleGraphNodeClick(nodeId: string) {
     const node = graphData.nodes.find((n) => n.id === nodeId);
     if (!node || node.type !== "page") return;
-
     if (node.notebookId) setActiveNotebookId(node.notebookId);
     if (node.sectionId) setActiveSectionId(node.sectionId);
     setActivePageId(node.id);
-    setViewMode("editor"); // Switch to editor view
+    setViewMode("editor");
   }
 
   function handleNavigateToPage(pageId: string) {
     const relPage = relatedPages.find((p) => p.id === pageId);
     if (!relPage) return;
-
     if (relPage.notebookId) setActiveNotebookId(relPage.notebookId);
     if (relPage.sectionId) setActiveSectionId(relPage.sectionId);
     setActivePageId(relPage.id);
@@ -388,14 +467,24 @@ export function WorkspaceApp() {
     onError: (err) => {
       setChatHistory((prev) => [
         ...prev,
-        { role: "ai", content: `Something went wrong: ${err instanceof Error ? err.message : "unknown error"}`, sources: [] },
+        { role: "ai", content: `Something went wrong: ${err instanceof Error ? err.message : "unknown"}`, sources: [] },
       ]);
     },
   });
 
+  // Scroll chat body to bottom on new messages
   useEffect(() => {
-    chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (chatBodyRef.current) {
+      chatBodyRef.current.scrollTo({ top: chatBodyRef.current.scrollHeight, behavior: "smooth" });
+    }
   }, [chatHistory, chatMutation.isPending]);
+
+  // Focus input when companion opens
+  useEffect(() => {
+    if (companionOpen) {
+      setTimeout(() => chatInputRef.current?.focus({ preventScroll: true }), 100);
+    }
+  }, [companionOpen]);
 
   function handleSendChat() {
     const prompt = chatInput.trim();
@@ -405,11 +494,15 @@ export function WorkspaceApp() {
     setChatInput("");
   }
 
+  function handleSendSuggestion(text: string) {
+    setChatHistory((prev) => [...prev, { role: "user", content: text }]);
+    chatMutation.mutate(text);
+  }
+
   // ── Mutations ─────────────────────────────────────────────────────────────
 
   const createWorkspaceMutation = useMutation({
-    mutationFn: () =>
-      createWorkspace(accessToken!, { name: "My Knowledge", description: "Your first Microcosm workspace", icon: "sparkles" }),
+    mutationFn: () => createWorkspace(accessToken!, { name: "My Knowledge", description: "Your first workspace", icon: "sparkles" }),
     onSuccess: (result) => {
       setActiveWorkspaceId(result.data.workspace.id);
       void queryClient.invalidateQueries({ queryKey: ["workspaces"] });
@@ -418,10 +511,7 @@ export function WorkspaceApp() {
 
   const updateWorkspaceMutation = useMutation({
     mutationFn: (input: { name: string }) => updateWorkspace(accessToken!, renamingItemId!, input),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["workspaces"] });
-      setRenamingItemId(null);
-    },
+    onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ["workspaces"] }); setRenamingItemId(null); },
   });
 
   const deleteWorkspaceMutation = useMutation({
@@ -430,31 +520,26 @@ export function WorkspaceApp() {
       void queryClient.invalidateQueries({ queryKey: ["workspaces"] });
       if (activeWorkspaceId === deletedId) {
         setActiveWorkspaceId(null); setActiveNotebookId(null);
-        setActiveSectionId(null);   setActivePageId(null);
+        setActiveSectionId(null); setActivePageId(null);
       }
     },
   });
 
   const onboardingMutation = useMutation({
     mutationFn: async (notebookName: string) => {
-      const wsRes  = await createWorkspace(accessToken!, {
-        name: user?.name ? `${user.name}'s Knowledge` : "Primary Workspace",
-        description: "Your primary workspace", icon: "sparkles",
-      });
+      const wsRes  = await createWorkspace(accessToken!, { name: user?.name ? `${user.name}'s Knowledge` : "Primary Workspace", description: "Your primary workspace", icon: "sparkles" });
       const wsId   = wsRes.data.workspace.id;
       const nbRes  = await createNotebook(accessToken!, wsId, { title: notebookName || "Personal" });
       const nbId   = nbRes.data.notebook.id;
       const secRes = await createSection(accessToken!, nbId, { title: "Home" });
       const secId  = secRes.data.section.id;
-      const pgRes  = await createPage(accessToken!, secId, {
-        title: "Getting Started", emoji: "🚀", blocks: onboardingBlocks,
-      });
+      const pgRes  = await createPage(accessToken!, secId, { title: "Getting Started", emoji: "🚀", blocks: onboardingBlocks });
       return { wsId, nbId, secId, pgId: pgRes.data.page.id };
     },
     onSuccess: (ids) => {
       void queryClient.invalidateQueries({ queryKey: ["workspaces"] });
       setActiveWorkspaceId(ids.wsId); setActiveNotebookId(ids.nbId);
-      setActiveSectionId(ids.secId);  setActivePageId(ids.pgId);
+      setActiveSectionId(ids.secId); setActivePageId(ids.pgId);
     },
   });
 
@@ -468,19 +553,14 @@ export function WorkspaceApp() {
 
   const updateNotebookMutation = useMutation({
     mutationFn: (input: { title: string }) => updateNotebook(accessToken!, renamingItemId!, input),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["notebooks", activeWorkspaceId] });
-      setRenamingItemId(null);
-    },
+    onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ["notebooks", activeWorkspaceId] }); setRenamingItemId(null); },
   });
 
   const deleteNotebookMutation = useMutation({
     mutationFn: (id: string) => deleteNotebook(accessToken!, id),
     onSuccess: (_, deletedId) => {
       void queryClient.invalidateQueries({ queryKey: ["notebooks", activeWorkspaceId] });
-      if (activeNotebookId === deletedId) {
-        setActiveNotebookId(null); setActiveSectionId(null); setActivePageId(null);
-      }
+      if (activeNotebookId === deletedId) { setActiveNotebookId(null); setActiveSectionId(null); setActivePageId(null); }
     },
   });
 
@@ -494,10 +574,7 @@ export function WorkspaceApp() {
 
   const updateSectionMutation = useMutation({
     mutationFn: (input: { title: string }) => updateSection(accessToken!, renamingItemId!, input),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["sections", activeNotebookId] });
-      setRenamingItemId(null);
-    },
+    onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ["sections", activeNotebookId] }); setRenamingItemId(null); },
   });
 
   const deleteSectionMutation = useMutation({
@@ -509,8 +586,7 @@ export function WorkspaceApp() {
   });
 
   const createPageMutation = useMutation({
-    mutationFn: () =>
-      createPage(accessToken!, activeSectionId!, { title: "Untitled Page", emoji: "", blocks: emptyBlocks }),
+    mutationFn: () => createPage(accessToken!, activeSectionId!, { title: "Untitled Page", emoji: "", blocks: emptyBlocks }),
     onSuccess: (result) => {
       setActivePageId(result.data.page.id);
       void queryClient.invalidateQueries({ queryKey: ["pages", activeSectionId] });
@@ -518,8 +594,7 @@ export function WorkspaceApp() {
   });
 
   const updatePageMutation = useMutation({
-    mutationFn: (input: { title?: string; blocks?: PageBlock[] }) =>
-      updatePage(accessToken!, activePageId!, input),
+    mutationFn: (input: { title?: string; blocks?: PageBlock[] }) => updatePage(accessToken!, activePageId!, input),
     onSuccess: (result) => {
       void queryClient.setQueryData(["page", activePageId], result);
       void queryClient.invalidateQueries({ queryKey: ["pages", activeSectionId] });
@@ -546,7 +621,7 @@ export function WorkspaceApp() {
     if (pages.length === 0) return "Create your first page.";
     return "Select a page to start writing.";
   }, [notebooks.length, notebooksQuery.isLoading, pages.length, pagesQuery.isLoading,
-      sections.length, sectionsQuery.isLoading, workspaces.length, workspacesQuery.isLoading]);
+    sections.length, sectionsQuery.isLoading, workspaces.length, workspacesQuery.isLoading]);
 
   // ── Onboarding gate ───────────────────────────────────────────────────────
 
@@ -562,181 +637,193 @@ export function WorkspaceApp() {
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <main className="app-shell">
+    <main className="flex min-h-screen bg-background text-foreground font-sans">
 
-      {/* ── SIDEBAR ─────────────────────────────────────────────────────── */}
-      <aside className="sidebar">
+      {/* ── SIDEBAR ──────────────────────────────────────────────────────── */}
+      <aside className="flex flex-col sticky top-0 h-screen w-[272px] flex-shrink-0
+                        border-r border-foreground/8 overflow-y-auto
+                        scrollbar-thin custom-scrollbar"
+             style={{ background: "rgba(4,4,5,0.96)", backdropFilter: "blur(24px)" }}>
 
-        {/* Brand */}
-        <div className="brand-row">
-          <span className="brand-mark">&lt;Microcosm /&gt;</span>
+        {/* Brand row */}
+        <div className="flex items-center justify-between px-4 py-4 border-b border-foreground/8 flex-shrink-0 mb-2">
+          <span className="font-mono text-[0.92rem] font-black tracking-tight text-foreground">
+            <span className="text-blue-400">&lt;</span>
+            Microcosm
+            <span className="text-blue-400"> /&gt;</span>
+          </span>
           <button
-            className="icon-button"
+            className="grid place-items-center w-7 h-7 border border-foreground/15 text-muted-foreground
+                       hover:border-foreground/30 hover:text-foreground transition-all"
             aria-label="New space"
-            title="New space"
             onClick={() => createWorkspaceMutation.mutate()}
             disabled={createWorkspaceMutation.isPending}
           >
-            <Plus size={14} />
+            <Plus size={13} />
           </button>
         </div>
 
         {/* Primary nav */}
-        <nav className="primary-nav" aria-label="Primary">
-          <a className="nav-item active" href="#">
-            <Home size={15} /> Home
-          </a>
-          <a className="nav-item" href="#">
-            <Search size={15} /> Search
-          </a>
-          <a className="nav-item" href="#">
-            <Bot size={15} /> Companion
-          </a>
+        <nav className="flex flex-col gap-0.5 px-2 pb-3 border-b border-foreground/8 mb-1">
+          {[
+            { icon: <Home size={14} />, label: "Home" },
+            { icon: <Search size={14} />, label: "Search" },
+            { icon: <Bot size={14} />, label: "Companion" },
+          ].map(({ icon, label }) => (
+            <a
+              key={label}
+              href="#"
+              className="flex items-center gap-2.5 min-h-[33px] px-2.5 text-muted-foreground text-[0.87rem]
+                         hover:text-foreground hover:bg-foreground/5 transition-all rounded-none"
+            >
+              {icon} {label}
+            </a>
+          ))}
         </nav>
 
-        {/* Library */}
-        <div className="sidebar-section hierarchy-section">
-          <div className="sidebar-section-head">
-            <span className="section-label">// library</span>
+        {/* Library tree */}
+        <div className="flex-1 min-h-0 overflow-y-auto px-2 pt-3 custom-scrollbar">
+          <div className="flex items-center justify-between px-1 mb-1.5">
+            <span className="font-mono text-[0.67rem] font-bold tracking-widest uppercase text-foreground/30">
+              // library
+            </span>
             {activeWorkspaceId && (
               <button
-                className="sidebar-inline-action"
-                aria-label="New notebook"
-                title="New notebook"
+                className="grid place-items-center w-5 h-5 border border-foreground/12 text-foreground/30
+                           hover:border-foreground/25 hover:text-foreground transition-all"
                 disabled={createNotebookMutation.isPending}
                 onClick={() => createNotebookMutation.mutate()}
               >
-                <Plus size={11} />
+                <Plus size={10} />
               </button>
             )}
           </div>
 
           {activeWorkspaceId && notebooks.length === 0 && !notebooksQuery.isLoading && (
-            <div className="empty-sidebar-state compact">
-              <p>No notebooks yet.</p>
-              <button onClick={() => createNotebookMutation.mutate()} disabled={createNotebookMutation.isPending}>
+            <div className="border border-dashed border-foreground/10 p-2.5 mb-2">
+              <p className="text-foreground/30 text-xs mb-2">No notebooks yet.</p>
+              <button
+                onClick={() => createNotebookMutation.mutate()}
+                disabled={createNotebookMutation.isPending}
+                className="text-xs text-blue-400 border border-blue-400/25 px-2.5 py-1 hover:bg-blue-400/8 transition-all"
+              >
                 + New notebook
               </button>
             </div>
           )}
 
-          <div className="library-tree">
+          <div className="flex flex-col gap-px">
             {notebooks.map((notebook) => (
-              <div className="notebook-group" key={notebook.id}>
-
+              <div key={notebook.id}>
                 {/* Notebook row */}
-                <div className={`notebook-row${notebook.id === activeNotebookId ? " active" : ""}`}>
+                <div className={`flex items-center w-full min-h-[33px] group
+                                 ${notebook.id === activeNotebookId ? "bg-foreground/5 text-foreground" : "text-foreground/65 hover:bg-foreground/4 hover:text-foreground/85"}
+                                 transition-all`}>
                   <button
-                    className="row-main-action"
-                    onClick={() => {
-                      setActiveNotebookId(notebook.id);
-                      setActiveSectionId(null);
-                      setActivePageId(null);
-                    }}
+                    className="flex items-center gap-1.5 flex-1 min-w-0 px-2 py-1.5 text-[0.87rem] font-semibold text-left"
+                    onClick={() => { setActiveNotebookId(notebook.id); setActiveSectionId(null); setActivePageId(null); }}
                   >
-                    <ChevronDown
-                      size={12}
-                      style={{
-                        transition: "transform 180ms ease",
-                        transform: notebook.id === activeNotebookId ? "rotate(0deg)" : "rotate(-90deg)",
-                        flexShrink: 0,
-                      }}
-                    />
-                    <BookOpen size={13} style={{ flexShrink: 0 }} />
+                    <ChevronDown size={11} className="flex-shrink-0 transition-transform"
+                      style={{ transform: notebook.id === activeNotebookId ? "rotate(0deg)" : "rotate(-90deg)" }} />
+                    <BookOpen size={12} className="flex-shrink-0" />
                     {renamingItemId === notebook.id ? (
-                      <input
-                        autoFocus
-                        className="inline-rename-input"
-                        value={renameDraft}
-                        onChange={(e) => setRenameDraft(e.target.value)}
+                      <input autoFocus className="inline-rename-input flex-1"
+                        value={renameDraft} onChange={(e) => setRenameDraft(e.target.value)}
                         onBlur={() => setRenamingItemId(null)}
                         onKeyDown={(e) => {
-                          if (e.key === "Enter" && renameDraft.trim())
-                            updateNotebookMutation.mutate({ title: renameDraft.trim() });
+                          if (e.key === "Enter" && renameDraft.trim()) updateNotebookMutation.mutate({ title: renameDraft.trim() });
                           if (e.key === "Escape") setRenamingItemId(null);
-                        }}
-                      />
+                        }} />
                     ) : (
-                      <span>{notebook.title}</span>
+                      <span className="truncate">{notebook.title}</span>
                     )}
                   </button>
-                  <button className="inline-edit-action" title="Rename"
-                    onClick={() => startRenaming(notebook.id, notebook.title)}>
-                    <Edit2 size={11} />
-                  </button>
-                  <button className="inline-delete-action" title="Delete"
-                    disabled={deleteNotebookMutation.isPending}
-                    onClick={() => { if (window.confirm("Delete this notebook and all its contents?")) deleteNotebookMutation.mutate(notebook.id); }}>
-                    <Trash2 size={11} />
-                  </button>
-                  {notebook.id === activeNotebookId && (
-                    <button className="inline-create-action" title="New section"
-                      disabled={createSectionMutation.isPending}
-                      onClick={() => createSectionMutation.mutate()}>
-                      <Plus size={11} />
+                  <div className="hidden group-hover:flex items-center gap-px pr-1.5">
+                    <button onClick={() => startRenaming(notebook.id, notebook.title)}
+                      className="grid place-items-center w-5 h-5 text-foreground/40 hover:text-foreground transition-colors">
+                      <Edit2 size={10} />
                     </button>
-                  )}
+                    <button onClick={() => { if (window.confirm("Delete this notebook?")) deleteNotebookMutation.mutate(notebook.id); }}
+                      disabled={deleteNotebookMutation.isPending}
+                      className="grid place-items-center w-5 h-5 text-red-500/60 hover:text-red-400 transition-colors">
+                      <Trash2 size={10} />
+                    </button>
+                    {notebook.id === activeNotebookId && (
+                      <button onClick={() => createSectionMutation.mutate()} disabled={createSectionMutation.isPending}
+                        className="grid place-items-center w-5 h-5 text-blue-400/60 hover:text-blue-400 transition-colors">
+                        <Plus size={10} />
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {/* Sections */}
                 {notebook.id === activeNotebookId && (
-                  <div className="section-list">
+                  <div className="ml-4 border-l border-foreground/8 pl-2 flex flex-col gap-px mt-0.5 mb-1">
                     {sections.map((section) => (
-                      <div className="section-group" key={section.id}>
-                        <div className={`section-row${section.id === activeSectionId ? " active" : ""}`}>
+                      <div key={section.id}>
+                        <div className={`flex items-center w-full min-h-[29px] group
+                                         ${section.id === activeSectionId ? "text-foreground/85" : "text-foreground/45 hover:text-foreground/70"}
+                                         transition-all`}>
                           <button
-                            className="row-main-action"
+                            className="flex items-center gap-1.5 flex-1 min-w-0 px-2 py-1 text-[0.83rem] text-left"
                             onClick={() => { setActiveSectionId(section.id); setActivePageId(null); }}
                           >
-                            <Folder size={12} style={{ flexShrink: 0 }} />
+                            <Folder size={11} className="flex-shrink-0" />
                             {renamingItemId === section.id ? (
-                              <input
-                                autoFocus
-                                className="inline-rename-input"
-                                value={renameDraft}
-                                onChange={(e) => setRenameDraft(e.target.value)}
+                              <input autoFocus className="inline-rename-input flex-1"
+                                value={renameDraft} onChange={(e) => setRenameDraft(e.target.value)}
                                 onBlur={() => setRenamingItemId(null)}
                                 onKeyDown={(e) => {
-                                  if (e.key === "Enter" && renameDraft.trim())
-                                    updateSectionMutation.mutate({ title: renameDraft.trim() });
+                                  if (e.key === "Enter" && renameDraft.trim()) updateSectionMutation.mutate({ title: renameDraft.trim() });
                                   if (e.key === "Escape") setRenamingItemId(null);
-                                }}
-                              />
+                                }} />
                             ) : (
-                              <span>{section.title}</span>
+                              <span className="truncate">{section.title}</span>
                             )}
                           </button>
-                          <button className="inline-edit-action" title="Rename"
-                            onClick={() => startRenaming(section.id, section.title)}>
-                            <Edit2 size={11} />
-                          </button>
-                          <button className="inline-delete-action" title="Delete"
-                            disabled={deleteSectionMutation.isPending}
-                            onClick={() => { if (window.confirm("Delete this section?")) deleteSectionMutation.mutate(section.id); }}>
-                            <Trash2 size={11} />
-                          </button>
-                          {section.id === activeSectionId && (
-                            <button className="inline-create-action" title="New page"
-                              disabled={createPageMutation.isPending}
-                              onClick={() => createPageMutation.mutate()}>
-                              <Plus size={11} />
+                          <div className="hidden group-hover:flex items-center gap-px pr-1">
+                            <button onClick={() => startRenaming(section.id, section.title)}
+                              className="grid place-items-center w-4.5 h-4.5 text-foreground/35 hover:text-foreground transition-colors">
+                              <Edit2 size={9} />
                             </button>
-                          )}
+                            <button onClick={() => { if (window.confirm("Delete this section?")) deleteSectionMutation.mutate(section.id); }}
+                              disabled={deleteSectionMutation.isPending}
+                              className="grid place-items-center w-4.5 h-4.5 text-red-500/50 hover:text-red-400 transition-colors">
+                              <Trash2 size={9} />
+                            </button>
+                            {section.id === activeSectionId && (
+                              <button onClick={() => createPageMutation.mutate()} disabled={createPageMutation.isPending}
+                                className="grid place-items-center w-4.5 h-4.5 text-blue-400/50 hover:text-blue-400 transition-colors">
+                                <Plus size={9} />
+                              </button>
+                            )}
+                          </div>
                         </div>
 
                         {/* Pages */}
                         {section.id === activeSectionId && (
-                          <div className="page-list">
+                          <div className="ml-3.5 border-l border-foreground/6 pl-2 flex flex-col gap-px mt-0.5 mb-1">
                             {pages.map((page) => (
-                              <div className={`page-row${page.id === activePageId ? " active" : ""}`} key={page.id}>
-                                <button className="row-main-action" onClick={() => setActivePageId(page.id)}>
-                                  <FileText size={11} style={{ flexShrink: 0 }} />
-                                  <span>{page.title}</span>
+                              <div key={page.id}
+                                className={`flex items-center min-h-[27px] relative group
+                                             ${page.id === activePageId ? "text-foreground" : "text-foreground/35 hover:text-foreground/60"}
+                                             transition-all`}>
+                                {page.id === activePageId && (
+                                  <div className="absolute -left-2.5 top-1/2 -translate-y-1/2 w-0.5 h-3.5 bg-[hsl(var(--orange))]" />
+                                )}
+                                <button
+                                  className="flex items-center gap-1.5 flex-1 min-w-0 px-2 py-1 text-[0.81rem] text-left"
+                                  onClick={() => setActivePageId(page.id)}
+                                >
+                                  <FileText size={10} className="flex-shrink-0" />
+                                  <span className="truncate">{page.title}</span>
                                 </button>
-                                <button className="inline-delete-action" title="Delete"
+                                <button
+                                  onClick={() => { if (window.confirm("Delete this page?")) deletePageMutation.mutate(page.id); }}
                                   disabled={deletePageMutation.isPending}
-                                  onClick={() => { if (window.confirm("Delete this page?")) deletePageMutation.mutate(page.id); }}>
-                                  <Trash2 size={11} />
+                                  className="hidden group-hover:grid place-items-center w-4 h-4 mr-1 text-red-500/50 hover:text-red-400 transition-colors">
+                                  <Trash2 size={9} />
                                 </button>
                               </div>
                             ))}
@@ -751,273 +838,192 @@ export function WorkspaceApp() {
           </div>
         </div>
 
-        {/* Documents */}
-        <div className="sidebar-section hierarchy-section" style={{ marginTop: "16px", borderTop: "1.5px solid var(--border-strong)", paddingTop: "14px" }}>
-          <div className="sidebar-section-head">
-            <span className="section-label">// documents</span>
+        {/* Documents section */}
+        <div className="px-2 pt-3 border-t border-foreground/10 mt-2">
+          <div className="flex items-center justify-between px-1 mb-1.5">
+            <span className="font-mono text-[0.67rem] font-bold tracking-widest uppercase text-foreground/30">
+              // documents
+            </span>
             {activeWorkspaceId && (
               <button
-                className="sidebar-inline-action"
-                aria-label="Upload document"
-                title="Upload PDF document"
+                className="grid place-items-center w-5 h-5 border border-foreground/12 text-foreground/30
+                           hover:border-foreground/25 hover:text-foreground transition-all"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={uploadDocumentMutation.isPending}
               >
-                <Plus size={11} />
+                <Plus size={10} />
               </button>
             )}
           </div>
 
-          <input
-            type="file"
-            ref={fileInputRef}
-            style={{ display: "none" }}
-            accept=".pdf"
-            onChange={handleFileChange}
-          />
+          <input type="file" ref={fileInputRef} className="hidden" accept=".pdf" onChange={handleFileChange} />
 
           {activeWorkspaceId && documents.length === 0 && !documentsQuery.isLoading && (
-            <div className="empty-sidebar-state compact">
-              <p>No documents yet.</p>
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={uploadDocumentMutation.isPending}
-                style={{
-                  fontSize: "0.7rem",
-                  padding: "3px 8px",
-                  border: "1.5px solid var(--border-strong)",
-                  borderRadius: "4px",
-                  background: "var(--bg-soft)",
-                  cursor: "pointer",
-                  color: "var(--text-2)"
-                }}
-              >
+            <div className="border border-dashed border-foreground/10 p-2.5 mb-2">
+              <p className="text-foreground/30 text-xs mb-2">No documents yet.</p>
+              <button onClick={() => fileInputRef.current?.click()} disabled={uploadDocumentMutation.isPending}
+                className="text-xs text-blue-400 border border-blue-400/25 px-2.5 py-1 hover:bg-blue-400/8 transition-all">
                 + Upload PDF
               </button>
             </div>
           )}
 
-          {activeWorkspaceId && (
-            <div className="sidebar-tree" style={{ display: "flex", flexDirection: "column", gap: "6px", marginTop: "8px" }}>
-              {documentsQuery.isLoading && <div className="empty-sidebar-state compact"><p>Loading docs…</p></div>}
-              {documents.map((doc) => (
-                <div
-                  className="document-row"
-                  key={doc.id}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    padding: "4px 8px",
-                    fontSize: "0.78rem",
-                    fontFamily: "var(--font-mono)",
-                    color: "var(--text-2)",
-                    border: "1.5px solid var(--border-strong)",
-                    borderRadius: "6px",
-                    background: "var(--bg-soft)",
-                    boxShadow: "1.5px 1.5px 0px 0px var(--border-strong)",
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: "6px", flex: 1, minWidth: 0 }}>
-                    <FileText size={11} style={{ flexShrink: 0, color: "var(--dim)" }} />
-                    <span style={{ textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }} title={doc.title}>
-                      {doc.title}
-                    </span>
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: "6px", marginLeft: "4px" }}>
-                    {doc.status === "pending" || doc.status === "processing" ? (
-                      <span className="neo-status generating" style={{ fontSize: "0.55rem", padding: "1px 4px" }}>
-                        syncing
-                      </span>
-                    ) : doc.status === "indexed" ? (
-                      <span className="neo-status" style={{ fontSize: "0.55rem", padding: "1px 4px", color: "#4ade80", borderColor: "#22c55e" }}>
-                        ready
-                      </span>
-                    ) : (
-                      <span className="neo-status" style={{ fontSize: "0.55rem", padding: "1px 4px", color: "#ef4444", borderColor: "#ef4444" }}>
-                        failed
-                      </span>
-                    )}
-                    <button
-                      className="inline-delete-action"
-                      style={{ background: "transparent", border: "none", color: "var(--dim)", padding: 0, cursor: "pointer", display: "grid", placeItems: "center" }}
-                      title="Delete document"
-                      onClick={() => { if (window.confirm("Delete this document?")) deleteDocumentMutation.mutate(doc.id); }}
-                    >
-                      <Trash2 size={11} />
-                    </button>
-                  </div>
+          <div className="flex flex-col gap-1.5 pb-2">
+            {documents.map((doc) => (
+              <div key={doc.id}
+                className="flex items-center justify-between px-2 py-1.5 border border-foreground/10 bg-foreground/2 gap-2">
+                <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                  <FileText size={10} className="flex-shrink-0 text-foreground/30" />
+                  <span className="text-[0.77rem] font-mono text-foreground/55 truncate" title={doc.title}>
+                    {doc.title}
+                  </span>
                 </div>
-              ))}
-            </div>
-          )}
+                <div className="flex items-center gap-1.5">
+                  {(doc.status === "pending" || doc.status === "processing") ? (
+                    <span className="text-[0.55rem] font-mono font-bold px-1.5 py-0.5 border border-blue-400/30 text-blue-400">syncing</span>
+                  ) : doc.status === "indexed" ? (
+                    <span className="text-[0.55rem] font-mono font-bold px-1.5 py-0.5 border border-emerald-500/30 text-emerald-400">ready</span>
+                  ) : (
+                    <span className="text-[0.55rem] font-mono font-bold px-1.5 py-0.5 border border-red-500/30 text-red-400">failed</span>
+                  )}
+                  <button
+                    onClick={() => { if (window.confirm("Delete this document?")) deleteDocumentMutation.mutate(doc.id); }}
+                    className="text-foreground/25 hover:text-red-400 transition-colors">
+                    <Trash2 size={10} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* Footer */}
-        <div className="sidebar-footer">
-          <div className="user-chip refined">
-            <span>{user?.name?.slice(0, 1).toUpperCase() ?? "M"}</span>
-            <div>
-              <strong>{user?.name ?? "Microcosm User"}</strong>
-              <small>{user?.email}</small>
+        <div className="mt-auto pt-3 border-t border-foreground/8 px-2 pb-3 flex-shrink-0 flex flex-col gap-1">
+          <div className="flex items-center gap-2.5 px-2 py-2.5 border border-foreground/10 bg-foreground/2 mb-1">
+            <div className="grid place-items-center w-7 h-7 bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-black flex-shrink-0">
+              {user?.name?.slice(0, 1).toUpperCase() ?? "M"}
+            </div>
+            <div className="min-w-0">
+              <strong className="block text-[0.83rem] font-semibold text-foreground truncate">{user?.name ?? "Microcosm User"}</strong>
+              <small className="block text-[0.71rem] text-foreground/35 truncate">{user?.email}</small>
             </div>
           </div>
-          <a className="nav-item" href="#"><Settings size={14} /> Settings</a>
-          <button className="nav-item nav-button" onClick={() => void logout()}>
-            <LogOut size={14} /> Logout
+          <a href="#"
+            className="flex items-center gap-2 min-h-[30px] px-2.5 text-foreground/45 text-[0.85rem]
+                       hover:text-foreground hover:bg-foreground/5 transition-all">
+            <Settings size={13} /> Settings
+          </a>
+          <button
+            onClick={() => void logout()}
+            className="flex items-center gap-2 min-h-[30px] px-2.5 text-foreground/45 text-[0.85rem]
+                       hover:text-foreground hover:bg-foreground/5 transition-all text-left">
+            <LogOut size={13} /> Logout
           </button>
         </div>
       </aside>
 
-      {/* ── WORKSPACE ───────────────────────────────────────────────────── */}
-      <section className="workspace">
+      {/* ── WORKSPACE ────────────────────────────────────────────────────── */}
+      <section className="flex flex-col flex-1 min-w-0 min-h-screen px-7 pt-6 pb-7 gap-0">
 
         {/* Topbar */}
-        <header className="topbar" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div className="topbar-left">
-            <p className="eyebrow">import {"{ Knowledge }"} from "@you/memory"</p>
-            <h1 className="topbar-title">
+        <header className="flex items-center justify-between gap-5 pb-5 border-b border-foreground/8 mb-5 flex-shrink-0">
+          <div className="min-w-0">
+            <p className="font-mono text-xs text-blue-400 tracking-wider mb-1">
+              import {"{ Knowledge }"} from "@you/memory"
+            </p>
+            <h1 className="font-serif text-[1.85rem] font-bold leading-[1.1] tracking-tight text-foreground m-0">
               {activeWorkspace?.name
-                ? <><span>{activeWorkspace.name}</span></>
-                : <><span>Microcosm</span></>}
+                ? <span className="text-[hsl(var(--orange))]">{activeWorkspace.name}</span>
+                : <span>Microcosm</span>}
             </h1>
           </div>
 
-          {activeWorkspaceId && (
-            <div className="neo-segmented-control" style={{
-              display: "flex",
-              gap: "8px",
-              border: "2px solid var(--border-strong)",
-              background: "var(--bg-soft)",
-              padding: "3px",
-              boxShadow: "2px 2px 0px var(--border-strong)",
-              borderRadius: "6px"
-            }}>
+          <div className="flex items-center gap-3">
+            {/* View mode segmented control */}
+            {activeWorkspaceId && (
+              <div className="flex gap-1.5 border border-foreground/20 bg-secondary p-1"
+                   style={{ boxShadow: "2px 2px 0px rgba(255,255,255,0.08)" }}>
+                {(["editor", "graph", "study"] as const).map((mode) => (
+                  <button key={mode} onClick={() => setViewMode(mode)}
+                    className={`px-3 py-1 font-mono text-[0.77rem] transition-all ${
+                      viewMode === mode
+                        ? "bg-purple-500 text-white font-bold"
+                        : "bg-transparent text-foreground/50 hover:text-foreground"
+                    }`}>
+                    {mode.charAt(0).toUpperCase() + mode.slice(1)}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div className="relative">
+              {!companionOpen && (
+                <div className="absolute right-0 bottom-full mb-1 z-50">
+                  <MayIHelpYouPopup onOpenChat={() => setCompanionOpen(true)} />
+                </div>
+              )}
               <button
-                onClick={() => setViewMode("editor")}
-                style={{
-                  padding: "4px 12px",
-                  fontFamily: "var(--font-mono)",
-                  fontSize: "0.78rem",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  background: viewMode === "editor" ? "var(--purple)" : "transparent",
-                  color: viewMode === "editor" ? "white" : "var(--text-2)",
-                  fontWeight: viewMode === "editor" ? "bold" : "normal"
-                }}
+                onClick={() => setCompanionOpen((o) => !o)}
+                className="flex items-center gap-2 min-h-[36px] px-4 border border-foreground/20 bg-secondary
+                           text-foreground/70 text-sm font-semibold hover:text-foreground hover:border-foreground/35
+                           transition-all"
+                style={{ boxShadow: "2px 2px 0px rgba(255,255,255,0.08)" }}
               >
-                Editor
-              </button>
-              <button
-                onClick={() => setViewMode("graph")}
-                style={{
-                  padding: "4px 12px",
-                  fontFamily: "var(--font-mono)",
-                  fontSize: "0.78rem",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  background: viewMode === "graph" ? "var(--purple)" : "transparent",
-                  color: viewMode === "graph" ? "white" : "var(--text-2)",
-                  fontWeight: viewMode === "graph" ? "bold" : "normal"
-                }}
-              >
-                Graph
-              </button>
-              <button
-                onClick={() => setViewMode("study")}
-                style={{
-                  padding: "4px 12px",
-                  fontFamily: "var(--font-mono)",
-                  fontSize: "0.78rem",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  background: viewMode === "study" ? "var(--purple)" : "transparent",
-                  color: viewMode === "study" ? "white" : "var(--text-2)",
-                  fontWeight: viewMode === "study" ? "bold" : "normal"
-                }}
-              >
-                Study
+                <MessageSquare size={14} />
+                {companionOpen ? "Hide AI" : "Ask AI"}
               </button>
             </div>
-          )}
-
-          <button className="primary-button">
-            <Sparkles size={15} />
-            Ask Companion
-          </button>
+          </div>
         </header>
 
-        <div className="content-grid">
+        {/* Content grid */}
+        <div className={`flex gap-5 flex-1 items-start ${companionOpen ? "grid-cols-[1fr_340px]" : ""}`}
+             style={{ display: "grid", gridTemplateColumns: companionOpen ? "minmax(0,1fr) 340px" : "minmax(0,1fr)" }}>
 
-          {/* ── GRAPH OR STUDY OR EDITOR ──────────────────────────────────────────── */}
+          {/* ── MAIN CONTENT ──────────────────────────────────────────────── */}
           {viewMode === "graph" ? (
-            <div className="editor-panel" style={{ height: "100%", padding: "10px" }}>
-              <KnowledgeGraph
-                nodes={graphData.nodes}
-                edges={graphData.edges}
-                onNodeClick={handleGraphNodeClick}
-              />
+            <div className="border border-foreground/12 min-h-[calc(100vh-160px)] overflow-hidden p-2.5"
+                 style={{ background: "rgba(8,8,10,0.7)" }}>
+              <KnowledgeGraph nodes={graphData.nodes} edges={graphData.edges} onNodeClick={handleGraphNodeClick} />
             </div>
           ) : viewMode === "study" ? (
-            <StudyView
-              accessToken={accessToken!}
-              workspaceId={activeWorkspaceId!}
-            />
+            <StudyView accessToken={accessToken!} workspaceId={activeWorkspaceId!} />
           ) : (
-            <div className="editor-panel">
+            <div className="border border-foreground/12 min-h-[calc(100vh-160px)] overflow-hidden"
+                 style={{ background: "rgba(8,8,10,0.7)" }}>
               {activePage ? (
                 <>
-                  <div className="page-meta" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div>
+                  {/* Page meta */}
+                  <div className="flex items-center justify-between px-5 pt-4">
+                    <div className="flex items-center gap-1.5 font-mono text-[0.73rem] text-foreground/30">
                       <span>{activeWorkspace?.name ?? "Space"}</span>
-                      <span className="page-meta-sep">›</span>
+                      <span className="text-foreground/20">›</span>
                       <span>{activeNotebook?.title ?? "Notebook"}</span>
-                      <span className="page-meta-sep">›</span>
+                      <span className="text-foreground/20">›</span>
                       <span>{activeSection?.title ?? "Section"}</span>
-                      <span className="page-meta-sep">›</span>
-                      <strong>{activePage.title}</strong>
+                      <span className="text-foreground/20">›</span>
+                      <strong className="text-foreground/50 font-medium">{activePage.title}</strong>
                     </div>
-
                     <button
                       onClick={() => generateFlashcardsMutation.mutate()}
                       disabled={generateFlashcardsMutation.isPending}
-                      style={{
-                        padding: "4px 10px",
-                        fontFamily: "var(--font-mono)",
-                        fontSize: "0.74rem",
-                        background: "var(--bg-card)",
-                        border: "1.5px solid var(--border-strong)",
-                        borderRadius: "4px",
-                        cursor: "pointer",
-                        fontWeight: "bold",
-                        boxShadow: "1.5px 1.5px 0px var(--border-strong)",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "6px"
-                      }}
+                      className="flex items-center gap-1.5 px-2.5 py-1 font-mono text-[0.73rem] font-bold
+                                 border border-foreground/15 text-foreground/50 hover:border-foreground/30
+                                 hover:text-foreground disabled:opacity-40 transition-all"
+                      style={{ boxShadow: "1.5px 1.5px 0px rgba(255,255,255,0.08)" }}
                     >
-                      <Zap size={10} style={{ color: "var(--purple)" }} />
-                      {generateFlashcardsMutation.isPending ? "Generating..." : "Generate Study Deck"}
+                      <Zap size={10} className="text-purple-400" />
+                      {generateFlashcardsMutation.isPending ? "Generating…" : "Generate Study Deck"}
                     </button>
                   </div>
 
-                  {/* Display auto-tags */}
+                  {/* Tags */}
                   {activePage.tags && activePage.tags.length > 0 && (
-                    <div className="page-tags-list" style={{ display: "flex", flexWrap: "wrap", gap: "6px", margin: "10px 0" }}>
+                    <div className="flex flex-wrap gap-1.5 px-5 mt-2.5">
                       {activePage.tags.map((tag) => (
-                        <span key={tag} className="tag-chip" style={{
-                          fontSize: "0.75rem",
-                          fontFamily: "var(--font-mono)",
-                          background: "var(--bg-soft)",
-                          border: "1.5px solid var(--border-strong)",
-                          borderRadius: "4px",
-                          padding: "2px 8px",
-                          color: "var(--text-2)",
-                          boxShadow: "1px 1px 0px var(--border-strong)"
-                        }}>
+                        <span key={tag}
+                          className="font-mono text-[0.74rem] border border-foreground/10 px-2 py-0.5 text-foreground/40"
+                          style={{ boxShadow: "1px 1px 0px rgba(255,255,255,0.06)" }}>
                           #{tag}
                         </span>
                       ))}
@@ -1032,56 +1038,33 @@ export function WorkspaceApp() {
                     knowledgeStatus={activePage.knowledgeStatus}
                     onSave={(blocks) => {
                       const firstBlock = blocks[0];
-                      const newTitle =
-                        firstBlock && typeof firstBlock.content === "string" && firstBlock.content.trim()
-                          ? firstBlock.content.trim()
-                          : "Untitled Page";
+                      const newTitle = firstBlock && typeof firstBlock.content === "string" && firstBlock.content.trim()
+                        ? firstBlock.content.trim() : "Untitled Page";
                       updatePageMutation.mutate({ title: newTitle, blocks });
                     }}
                   />
 
-                  {/* Related Notes Footer panel */}
+                  {/* Related notes */}
                   {relatedPages.length > 0 && (
-                    <div className="related-notes-panel" style={{
-                      marginTop: "40px",
-                      borderTop: "2px dashed var(--border-strong)",
-                      paddingTop: "20px"
-                    }}>
-                      <h3 style={{
-                        fontFamily: "var(--font-mono)",
-                        fontSize: "0.85rem",
-                        textTransform: "lowercase",
-                        color: "var(--dim)",
-                        marginBottom: "12px"
-                      }}>
+                    <div className="mt-10 border-t-2 border-dashed border-foreground/10 pt-5 px-5 pb-5">
+                      <h3 className="font-mono text-[0.84rem] lowercase text-foreground/30 mb-3">
                         // related notes
                       </h3>
-                      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                      <div className="flex flex-col gap-1.5">
                         {relatedPages.map((relPage) => (
                           <button
                             key={relPage.id}
                             onClick={() => handleNavigateToPage(relPage.id)}
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: "8px",
-                              padding: "6px 12px",
-                              background: "var(--bg-soft)",
-                              border: "1.5px solid var(--border-strong)",
-                              borderRadius: "6px",
-                              cursor: "pointer",
-                              width: "100%",
-                              textAlign: "left",
-                              fontFamily: "var(--font-mono)",
-                              fontSize: "0.82rem",
-                              boxShadow: "1.5px 1.5px 0px var(--border-strong)",
-                            }}
+                            className="flex items-center gap-2 px-3 py-2 border border-foreground/10 bg-foreground/2
+                                       text-left font-mono text-[0.81rem] w-full
+                                       hover:border-foreground/25 hover:bg-foreground/4 transition-all"
+                            style={{ boxShadow: "1.5px 1.5px 0px rgba(255,255,255,0.06)" }}
                           >
-                            <FileText size={12} style={{ color: "var(--purple)" }} />
-                            <strong style={{ color: "var(--text-1)" }}>{relPage.title}</strong>
-                            <div style={{ display: "flex", gap: "4px", marginLeft: "auto" }}>
+                            <FileText size={11} className="text-purple-400 flex-shrink-0" />
+                            <strong className="text-foreground/70">{relPage.title}</strong>
+                            <div className="flex gap-1 ml-auto">
                               {relPage.tags.map((t) => (
-                                <span key={t} style={{ fontSize: "0.65rem", padding: "1px 4px", border: "1px solid var(--border-strong)", borderRadius: "3px" }}>
+                                <span key={t} className="text-[0.65rem] px-1 py-0.5 border border-foreground/10 text-foreground/30">
                                   #{t}
                                 </span>
                               ))}
@@ -1093,31 +1076,37 @@ export function WorkspaceApp() {
                   )}
                 </>
               ) : (
-                <div className="editor-empty-state">
-                  <Sparkles size={28} />
-                  <h2>{hierarchyState}</h2>
-                  <p>
+                <div className="flex flex-col items-center justify-center gap-3 min-h-[calc(100vh-220px)] px-8 py-12 text-center">
+                  <Sparkles size={26} className="text-[hsl(var(--orange))] opacity-70" />
+                  <h2 className="font-serif text-[1.55rem] font-bold text-foreground/70 tracking-tight m-0">
+                    {hierarchyState}
+                  </h2>
+                  <p className="text-foreground/35 text-[0.9rem] leading-relaxed max-w-[440px] m-0">
                     Microcosm needs a space, notebook, section, and page before the editor can save knowledge blocks.
                   </p>
-                  <div className="empty-actions">
+                  <div className="flex flex-wrap justify-center gap-2 mt-2">
                     {workspaces.length === 0 && (
-                      <button onClick={() => createWorkspaceMutation.mutate()} disabled={createWorkspaceMutation.isPending}>
-                        <Plus size={13} /> Create space
+                      <button onClick={() => createWorkspaceMutation.mutate()} disabled={createWorkspaceMutation.isPending}
+                        className="flex items-center gap-1.5 min-h-[33px] px-4 border border-foreground/25 text-[hsl(var(--orange))] text-sm font-semibold hover:bg-foreground/5 transition-all">
+                        <Plus size={12} /> Create space
                       </button>
                     )}
                     {activeWorkspaceId && notebooks.length === 0 && (
-                      <button onClick={() => createNotebookMutation.mutate()} disabled={createNotebookMutation.isPending}>
-                        <Plus size={13} /> Create notebook
+                      <button onClick={() => createNotebookMutation.mutate()} disabled={createNotebookMutation.isPending}
+                        className="flex items-center gap-1.5 min-h-[33px] px-4 border border-foreground/25 text-[hsl(var(--orange))] text-sm font-semibold hover:bg-foreground/5 transition-all">
+                        <Plus size={12} /> Create notebook
                       </button>
                     )}
                     {activeNotebookId && sections.length === 0 && (
-                      <button onClick={() => createSectionMutation.mutate()} disabled={createSectionMutation.isPending}>
-                        <Plus size={13} /> Create section
+                      <button onClick={() => createSectionMutation.mutate()} disabled={createSectionMutation.isPending}
+                        className="flex items-center gap-1.5 min-h-[33px] px-4 border border-foreground/25 text-[hsl(var(--orange))] text-sm font-semibold hover:bg-foreground/5 transition-all">
+                        <Plus size={12} /> Create section
                       </button>
                     )}
                     {activeSectionId && pages.length === 0 && (
-                      <button onClick={() => createPageMutation.mutate()} disabled={createPageMutation.isPending}>
-                        <Plus size={13} /> Create page
+                      <button onClick={() => createPageMutation.mutate()} disabled={createPageMutation.isPending}
+                        className="flex items-center gap-1.5 min-h-[33px] px-4 border border-foreground/25 text-[hsl(var(--orange))] text-sm font-semibold hover:bg-foreground/5 transition-all">
+                        <Plus size={12} /> Create page
                       </button>
                     )}
                   </div>
@@ -1126,184 +1115,226 @@ export function WorkspaceApp() {
             </div>
           )}
 
-          {/* ── AI COMPANION ──────────────────────────────────────────── */}
-          <aside className="neo-panel">
-
-            {/* Header */}
-            <div className="neo-header">
-              <div className="neo-header-title">
-                <Zap size={13} />
-                AI Companion
-              </div>
-              <div className="neo-header-right">
-                {chatHistory.length > 0 && (
-                  <button
-                    className="neo-clear-btn"
-                    onClick={() => setChatHistory([])}
-                    title="Clear chat history"
-                  >
-                    <RotateCcw size={12} />
-                  </button>
-                )}
-                <span className={`neo-status${chatMutation.isPending ? " generating" : ""}`}>
-                  {chatMutation.isPending ? "Generating" : "Ready"}
-                </span>
-              </div>
-            </div>
-
-            {/* Scope Selector segmented control */}
-            <div className="neo-scope-selector">
-              <button
-                className={`neo-scope-btn ${chatScope === "workspace" ? "active" : ""}`}
-                onClick={() => setChatScope("workspace")}
+          {/* ── AI COMPANION PANEL ────────────────────────────────────────── */}
+          <AnimatePresence>
+            {companionOpen && (
+              <motion.aside
+                initial={{ opacity: 0, x: 30 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 30 }}
+                transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                className="flex flex-col sticky top-6 border-2 border-foreground overflow-hidden font-sans"
+                style={{
+                  height: "calc(100vh - 148px)",
+                  background: "hsl(var(--card))",
+                  boxShadow: "5px 5px 0px 0px rgba(255,255,255,0.12)",
+                }}
               >
-                <Layers3 size={11} />
-                Workspace
-              </button>
-              <button
-                className={`neo-scope-btn ${chatScope === "notebook" ? "active" : ""}`}
-                disabled={!activeNotebookId}
-                onClick={() => setChatScope("notebook")}
-                title={!activeNotebookId ? "No notebook selected" : `Search Notebook: ${activeNotebook?.title}`}
-              >
-                <BookOpen size={11} />
-                Notebook
-              </button>
-              <button
-                className={`neo-scope-btn ${chatScope === "page" ? "active" : ""}`}
-                disabled={!activePageId}
-                onClick={() => setChatScope("page")}
-                title={!activePageId ? "No page open" : `Search Page: ${activePage?.title}`}
-              >
-                <FileText size={11} />
-                Page
-              </button>
-            </div>
-
-            {/* Chat history */}
-            <div className="neo-chat-history">
-              {chatHistory.length === 0 && (
-                <div className="neo-welcome">
-                  <div className="neo-welcome-msg">
-                    <div className="neo-ai-label"><Bot size={12} /> Assistant</div>
-                    Hi! I'm your AI Companion. Ask me anything about your {chatScope === "workspace" ? "workspace" : chatScope === "notebook" ? "active notebook" : "active page"}.
+                {/* Header — Mac-style code bar */}
+                <div className="flex items-center justify-between p-3 border-b-2 border-foreground bg-secondary flex-shrink-0 font-mono text-xs">
+                  <div className="flex flex-col gap-0.5">
+                    <div className="flex items-center gap-1.5">
+                      {/* Mac traffic lights */}
+                      <div className="flex gap-1">
+                        <span className="w-2.5 h-2.5 rounded-full bg-red-500 border border-foreground/20" />
+                        <span className="w-2.5 h-2.5 rounded-full bg-yellow-500 border border-foreground/20" />
+                        <span className="w-2.5 h-2.5 rounded-full bg-green-500 border border-foreground/20" />
+                      </div>
+                      <div className="ml-1 flex items-center gap-1 text-foreground font-semibold">
+                        <span className="text-blue-400">const</span>
+                        <span>companion</span>
+                        <span className="text-foreground/50">=</span>
+                        <span className="text-gradient-warm font-bold font-sans">AI;</span>
+                      </div>
+                    </div>
+                    {/* Live status */}
+                    <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground pl-0.5 mt-0.5">
+                      <span className="relative flex h-1.5 w-1.5">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                        <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
+                      </span>
+                      <span>
+                        {chatMutation.isPending
+                          ? "Generating…"
+                          : `Scope: ${chatScope.charAt(0).toUpperCase() + chatScope.slice(1)}`}
+                      </span>
+                    </div>
                   </div>
 
-                  <span className="neo-suggestions-label">
-                    <Sparkles size={11} /> Suggested
-                  </span>
-
-                  <div className="neo-chips">
-                    {suggestions.map((sug) => (
-                      <motion.button
-                        key={sug.label}
-                        className="neo-chip"
-                        initial={{ opacity: 0, x: -8 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-                        onClick={() => {
-                          setChatInput(sug.label);
-                          setTimeout(() => document.getElementById("neo-input")?.focus(), 30);
-                        }}
+                  <div className="flex items-center gap-1">
+                    {chatHistory.length > 0 && (
+                      <button
+                        onClick={() => setChatHistory([])}
+                        className="w-7 h-7 flex items-center justify-center hover:bg-card border border-transparent hover:border-foreground/20 transition-all text-foreground/60 hover:text-foreground"
+                        title="Clear conversation"
                       >
-                        <span className="neo-chip-icon">{sug.icon}</span>
-                        {sug.label}
-                      </motion.button>
-                    ))}
+                        <RotateCcw className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                    <button
+                      onClick={() => setCompanionOpen(false)}
+                      className="w-7 h-7 flex items-center justify-center hover:bg-card border border-transparent hover:border-foreground/20 transition-all text-foreground/60 hover:text-foreground"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 </div>
-              )}
 
-              <AnimatePresence initial={false}>
-                {chatHistory.map((msg, i) => (
-                  <motion.div
-                    key={i}
-                    className={`neo-bubble ${msg.role}`}
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-                  >
-                    {msg.role === "ai" && (
-                      <div className="neo-ai-meta">
-                        <div className="neo-ai-label"><Bot size={12} /> Assistant</div>
-                        <div className="neo-msg-actions">
-                          <button
-                            className="neo-action-btn"
-                            onClick={() => handleCopyMessage(msg.content, i)}
-                            title="Copy response"
-                          >
-                            {copiedMessageIndex === i ? <Check size={11} /> : <Copy size={11} />}
-                          </button>
-                          {activePageId && (
-                            <button
-                              className="neo-action-btn"
-                              onClick={() => handleInsertMessage(msg.content, i)}
-                              title="Insert into page"
-                            >
-                              {insertedMessageIndex === i ? <Check size={11} style={{ color: "#4ade80" }} /> : <PlusSquare size={11} />}
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                    {msg.role === "user" ? (
-                      msg.content
-                    ) : (
-                      <>
-                        <ReactMarkdown className="markdown-prose">{msg.content}</ReactMarkdown>
-                        {msg.sources && msg.sources.length > 0 && (
-                          <div className="citation-list">
-                            <span className="citation-list-label">Sources</span>
-                            {msg.sources.map((source, si) => (
-                              <CitationBadge key={source.pageId} source={source} index={si + 1} />
-                            ))}
+                {/* Scope selector */}
+                <div className="grid grid-cols-3 gap-0.5 mx-3 my-2.5 p-0.5 border border-foreground/12 bg-background/40 flex-shrink-0">
+                  {(["workspace", "notebook", "page"] as const).map((scope) => (
+                    <button
+                      key={scope}
+                      onClick={() => setChatScope(scope)}
+                      disabled={(scope === "notebook" && !activeNotebookId) || (scope === "page" && !activePageId)}
+                      className={`flex items-center justify-center gap-1.5 h-7 text-xs font-semibold transition-all
+                                  ${chatScope === scope
+                                    ? "bg-foreground/10 text-foreground"
+                                    : "bg-transparent text-muted-foreground hover:text-foreground/70"}
+                                  disabled:opacity-30 disabled:cursor-not-allowed`}
+                    >
+                      {scope === "workspace" && <Layers3 size={10} />}
+                      {scope === "notebook" && <BookOpen size={10} />}
+                      {scope === "page" && <FileText size={10} />}
+                      {scope.charAt(0).toUpperCase() + scope.slice(1)}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Chat body */}
+                <div ref={chatBodyRef}
+                     className="flex-1 overflow-y-auto px-3.5 py-3 space-y-4 custom-scrollbar min-h-0">
+
+                  {chatHistory.length === 0 && !chatMutation.isPending && (
+                    <CompanionWelcomeSequence chatScope={chatScope} onSend={handleSendSuggestion} />
+                  )}
+
+                  <AnimatePresence initial={false}>
+                    {chatHistory.map((msg, i) => {
+                      const isUser = msg.role === "user";
+                      return (
+                        <motion.div
+                          key={i}
+                          className={`flex items-start gap-2.5 ${isUser ? "flex-row-reverse" : ""}`}
+                          initial={{ opacity: 0, y: 8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+                        >
+                          {/* Avatar */}
+                          <div className={`w-7 h-7 flex items-center justify-center text-xs flex-shrink-0 border border-foreground
+                                           ${isUser ? "bg-foreground text-background" : "bg-secondary text-foreground"}`}
+                               style={{ boxShadow: "1px 1px 0px rgba(255,255,255,0.1)" }}>
+                            {isUser ? <User className="w-3.5 h-3.5" /> : <Bot className="w-3.5 h-3.5" />}
                           </div>
-                        )}
-                      </>
-                    )}
-                  </motion.div>
-                ))}
-              </AnimatePresence>
 
-              {chatMutation.isPending && (
-                <motion.div
-                  className="neo-thinking"
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
+                          <div className="flex flex-col max-w-[78%]">
+                            {/* AI label + actions */}
+                            {!isUser && (
+                              <div className="flex items-center justify-between mb-1.5 w-full">
+                                <div className="flex items-center gap-1.5 font-mono text-[0.63rem] font-bold tracking-widest uppercase text-purple-400">
+                                  <Bot size={10} /> Assistant
+                                </div>
+                                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <button onClick={() => handleCopyMessage(msg.content, i)} title="Copy"
+                                    className="grid place-items-center w-5.5 h-5.5 border border-foreground/10 text-muted-foreground hover:text-foreground hover:border-foreground/25 transition-all">
+                                    {copiedMessageIndex === i ? <Check size={10} /> : <Copy size={10} />}
+                                  </button>
+                                  {activePageId && (
+                                    <button onClick={() => handleInsertMessage(msg.content, i)} title="Insert into page"
+                                      className="grid place-items-center w-5.5 h-5.5 border border-foreground/10 text-muted-foreground hover:text-foreground hover:border-foreground/25 transition-all">
+                                      {insertedMessageIndex === i ? <Check size={10} className="text-emerald-400" /> : <PlusSquare size={10} />}
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Bubble */}
+                            <div className={`px-3.5 py-2.5 border text-sm leading-relaxed
+                                             ${isUser
+                                               ? "bg-foreground text-background border-foreground rounded-xl rounded-tr-none"
+                                               : "bg-secondary text-foreground border-foreground/15 rounded-xl rounded-tl-none"}`}>
+                              {isUser
+                                ? msg.content
+                                : <ReactMarkdown className="markdown-prose">{msg.content}</ReactMarkdown>
+                              }
+                            </div>
+
+                            {/* Source citations */}
+                            {!isUser && msg.sources && msg.sources.length > 0 && (
+                              <div className="flex flex-wrap gap-1.5 mt-2 pt-2 border-t border-dashed border-foreground/15">
+                                <div className="w-full text-[9px] font-mono font-bold text-muted-foreground tracking-wider uppercase">
+                                  Sources
+                                </div>
+                                {msg.sources.map((source, si) => (
+                                  <CitationBadge
+                                    key={source.pageId}
+                                    source={source}
+                                    index={si + 1}
+                                    onNavigate={handleNavigateToPage}
+                                  />
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </motion.div>
+                      );
+                    })}
+                  </AnimatePresence>
+
+                  {/* Typing indicator */}
+                  {chatMutation.isPending && (
+                    <motion.div
+                      className="flex items-start gap-2.5"
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                    >
+                      <div className="w-7 h-7 bg-secondary border border-foreground flex items-center justify-center text-xs flex-shrink-0"
+                           style={{ boxShadow: "1px 1px 0px rgba(255,255,255,0.1)" }}>
+                        <Bot className="w-3.5 h-3.5" />
+                      </div>
+                      <div className="bg-secondary border border-foreground/15 px-4 py-3 rounded-xl rounded-tl-none flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 bg-foreground rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+                        <span className="w-1.5 h-1.5 bg-foreground rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+                        <span className="w-1.5 h-1.5 bg-foreground rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+                      </div>
+                    </motion.div>
+                  )}
+                </div>
+
+                {/* Chat input */}
+                <form
+                  onSubmit={(e) => { e.preventDefault(); handleSendChat(); }}
+                  className="p-3 border-t-2 border-foreground bg-secondary/40 flex items-center gap-2 flex-shrink-0"
                 >
-                  <div className="neo-ai-label" style={{ margin: 0 }}><Bot size={12} /></div>
-                  <div className="neo-thinking-dots">
-                    <span /><span /><span />
-                  </div>
-                </motion.div>
-              )}
-
-              <div ref={chatBottomRef} />
-            </div>
-
-            {/* Input */}
-            <div className="neo-input-wrap">
-              <div className="neo-input-row">
-                <input
-                  id="neo-input"
-                  placeholder={`Ask from this ${chatScope}…`}
-                  value={chatInput}
-                  onChange={(e) => setChatInput(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleSendChat()}
-                  disabled={chatMutation.isPending}
-                />
-                <button
-                  className="neo-send-btn"
-                  onClick={handleSendChat}
-                  disabled={!chatInput.trim() || chatMutation.isPending}
-                  aria-label="Send"
-                >
-                  <SendHorizontal size={14} />
-                </button>
-              </div>
-            </div>
-
-          </aside>
+                  <input
+                    ref={chatInputRef}
+                    id="neo-input"
+                    type="text"
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    placeholder={`Ask from this ${chatScope}…`}
+                    disabled={chatMutation.isPending}
+                    className="flex-1 min-w-0 bg-card border-2 border-foreground px-3 py-2 text-xs
+                               focus:outline-none font-mono text-foreground placeholder:text-muted-foreground
+                               disabled:opacity-50"
+                  />
+                  <button
+                    type="submit"
+                    disabled={!chatInput.trim() || chatMutation.isPending}
+                    className="p-2.5 bg-foreground text-background border-2 border-foreground
+                               hover:bg-secondary hover:text-foreground hover:-translate-y-px
+                               active:translate-y-0 disabled:opacity-40 transition-all flex-shrink-0"
+                    style={{ boxShadow: "2px 2px 0px rgba(255,255,255,0.1)" }}
+                  >
+                    {chatMutation.isPending
+                      ? <Loader2 className="w-4 h-4 animate-spin" />
+                      : <Send className="w-4 h-4" />}
+                  </button>
+                </form>
+              </motion.aside>
+            )}
+          </AnimatePresence>
         </div>
       </section>
     </main>

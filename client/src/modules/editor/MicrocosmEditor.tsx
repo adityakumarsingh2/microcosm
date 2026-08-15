@@ -3,6 +3,7 @@ import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import TaskItem from "@tiptap/extension-task-item";
 import TaskList from "@tiptap/extension-task-list";
+import ImageExtension from "@tiptap/extension-image";
 import { useEffect, useRef, useState } from "react";
 import {
   Bold,
@@ -331,47 +332,53 @@ export function MicrocosmEditor({
   const effectiveSaveState: SaveState = isSaving ? "saving" : saveState;
 
   return (
-    <div className="editor-wrap">
-      {/* Hidden file input for image upload */}
+    <div className="border border-foreground/10 rounded-none overflow-hidden"
+         style={{ background: "rgba(6,6,8,0.7)" }}>
+      {/* Hidden file input */}
       <input
         id="microcosm-image-upload-input"
         ref={fileInputRef}
         type="file"
         accept="image/*"
-        style={{ display: "none" }}
+        className="hidden"
         onChange={handleImageUpload}
       />
 
-      {/* ── Toolbar ───────────────────────────────────────────────────── */}
-      <div className="editor-toolbar">
-        <div className="toolbar-left">
-          <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.72rem", color: "var(--dim)" }}>
-            // page
-          </span>
+      {/* ── Toolbar ──────────────────────────────────────────────────────── */}
+      <div className="flex items-center justify-between gap-3 px-4 py-2.5
+                      border-b border-foreground/10 bg-black/20 font-mono text-xs text-foreground/40">
+        <div className="flex items-center gap-2.5">
+          <span className="font-mono text-xs text-foreground/25">// page</span>
           {knowledgeStatus && knowledgeStatus !== "not_indexed" && (
             <KnowledgePill status={knowledgeStatus} />
           )}
         </div>
 
-        <div className="toolbar-actions">
-          {/* Save state indicator */}
+        <div className="flex items-center gap-2">
+          {/* Save state pill */}
           <span className={`save-state ${effectiveSaveState}`}>
-            {effectiveSaveState === "saving" && <Loader2 size={10} style={{ animation: "spin 0.8s linear infinite" }} />}
+            {effectiveSaveState === "saving" && (
+              <Loader2 size={10} className="animate-spin" />
+            )}
             {SAVE_LABELS[effectiveSaveState]}
           </span>
 
-          <div className="toolbar-divider" />
+          <div className="w-px h-4 bg-foreground/10 flex-shrink-0" />
 
           {/* Image upload */}
           <button
             disabled={!editor || disabled || isUploading}
             onClick={() => fileInputRef.current?.click()}
             title="Insert image"
+            className="inline-flex items-center gap-1.5 min-h-[26px] px-2.5 border border-foreground/10
+                       rounded-none bg-transparent text-foreground/50 text-[11px]
+                       hover:border-foreground/25 hover:bg-secondary/50 hover:text-foreground
+                       disabled:opacity-30 disabled:cursor-not-allowed transition-all"
           >
             {isUploading ? (
-              <><Loader2 size={12} style={{ animation: "spin 0.8s linear infinite" }} /> Uploading</>
+              <><Loader2 size={11} className="animate-spin" /> Uploading</>
             ) : (
-              <><ImageIcon size={12} /> Image</>
+              <><ImageIcon size={11} /> Image</>
             )}
           </button>
 
@@ -380,88 +387,65 @@ export function MicrocosmEditor({
             disabled={!editor || disabled || isSaving || saveState === "saved"}
             onClick={saveNow}
             title="Save now"
+            className="inline-flex items-center gap-1.5 min-h-[26px] px-2.5 border border-foreground/10
+                       rounded-none bg-transparent text-foreground/50 text-[11px]
+                       hover:border-foreground/25 hover:bg-secondary/50 hover:text-foreground
+                       disabled:opacity-30 disabled:cursor-not-allowed transition-all"
           >
             Save now
           </button>
         </div>
       </div>
 
-      {/* ── Bubble menu (text selection) ──────────────────────────────── */}
+      {/* ── Bubble menu (text selection) ─────────────────────────────────── */}
       {editor && (
         <BubbleMenu editor={editor} className="bubble-menu">
-          <button
-            onClick={() => editor.chain().focus().toggleBold().run()}
-            className={editor.isActive("bold") ? "is-active" : ""}
-            title="Bold"
-          >
+          <button onClick={() => editor.chain().focus().toggleBold().run()}
+            className={editor.isActive("bold") ? "is-active" : ""} title="Bold">
             <Bold size={13} />
           </button>
-          <button
-            onClick={() => editor.chain().focus().toggleItalic().run()}
-            className={editor.isActive("italic") ? "is-active" : ""}
-            title="Italic"
-          >
+          <button onClick={() => editor.chain().focus().toggleItalic().run()}
+            className={editor.isActive("italic") ? "is-active" : ""} title="Italic">
             <Italic size={13} />
           </button>
-          <button
-            onClick={() => editor.chain().focus().toggleStrike().run()}
-            className={editor.isActive("strike") ? "is-active" : ""}
-            title="Strikethrough"
-          >
+          <button onClick={() => editor.chain().focus().toggleStrike().run()}
+            className={editor.isActive("strike") ? "is-active" : ""} title="Strikethrough">
             <Strikethrough size={13} />
           </button>
-          <button
-            onClick={() => editor.chain().focus().toggleCode().run()}
-            className={editor.isActive("code") ? "is-active" : ""}
-            title="Inline code"
-          >
+          <button onClick={() => editor.chain().focus().toggleCode().run()}
+            className={editor.isActive("code") ? "is-active" : ""} title="Inline code">
             <Code size={13} />
           </button>
         </BubbleMenu>
       )}
 
-      {/* ── Floating menu (empty line) ────────────────────────────────── */}
+      {/* ── Floating menu (empty line) ───────────────────────────────────── */}
       {editor && (
         <FloatingMenu editor={editor} className="floating-menu" tippyOptions={{ duration: 80 }}>
-          <button
-            onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-            className={editor.isActive("heading", { level: 1 }) ? "is-active" : ""}
-            title="Heading 1"
-          >
+          <button onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
+            className={editor.isActive("heading", { level: 1 }) ? "is-active" : ""} title="Heading 1">
             <Heading1 size={13} />
           </button>
-          <button
-            onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-            className={editor.isActive("heading", { level: 2 }) ? "is-active" : ""}
-            title="Heading 2"
-          >
+          <button onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+            className={editor.isActive("heading", { level: 2 }) ? "is-active" : ""} title="Heading 2">
             <Heading2 size={13} />
           </button>
-          <button
-            onClick={() => editor.chain().focus().toggleBulletList().run()}
-            className={editor.isActive("bulletList") ? "is-active" : ""}
-            title="Bullet list"
-          >
+          <button onClick={() => editor.chain().focus().toggleBulletList().run()}
+            className={editor.isActive("bulletList") ? "is-active" : ""} title="Bullet list">
             <List size={13} />
           </button>
-          <button
-            onClick={() => editor.chain().focus().toggleTaskList().run()}
-            className={editor.isActive("taskList") ? "is-active" : ""}
-            title="Task list"
-          >
+          <button onClick={() => editor.chain().focus().toggleTaskList().run()}
+            className={editor.isActive("taskList") ? "is-active" : ""} title="Task list">
             <CheckSquare size={13} />
           </button>
-          <button
-            onClick={() => editor.chain().focus().toggleBlockquote().run()}
-            className={editor.isActive("blockquote") ? "is-active" : ""}
-            title="Quote"
-          >
+          <button onClick={() => editor.chain().focus().toggleBlockquote().run()}
+            className={editor.isActive("blockquote") ? "is-active" : ""} title="Quote">
             <Quote size={13} />
           </button>
         </FloatingMenu>
       )}
 
-      {/* ── Editor content ───────────────────────────────────────────── */}
+      {/* ── Editor content ───────────────────────────────────────────────── */}
       <EditorContent editor={editor} />
     </div>
   );

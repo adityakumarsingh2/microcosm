@@ -305,18 +305,8 @@ export function KnowledgeGraph({ nodes, edges, onNodeClick }: KnowledgeGraphProp
   };
 
   return (
-    <div
-      style={{
-        width: "100%",
-        height: "100%",
-        position: "relative",
-        overflow: "hidden",
-        background: "var(--bg, #fcfcfc)",
-        border: "2px solid var(--border-strong)",
-        borderRadius: "8px",
-        boxShadow: "3px 3px 0px 0px var(--border-strong)",
-      }}
-    >
+    <div className="relative w-full h-full overflow-hidden bg-background border-2 border-foreground"
+         style={{ boxShadow: "3px 3px 0px 0px rgba(255,255,255,0.12)", borderRadius: 0 }}>
       <canvas
         ref={canvasRef}
         onMouseDown={handleMouseDown}
@@ -325,26 +315,12 @@ export function KnowledgeGraph({ nodes, edges, onNodeClick }: KnowledgeGraphProp
         onWheel={handleWheel}
         style={{ display: "block", cursor: dragNodeRef.current ? "grabbing" : "grab" }}
       />
-      {/* Controls Overlay */}
-      <div
-        style={{
-          position: "absolute",
-          bottom: "16px",
-          right: "16px",
-          display: "flex",
-          gap: "8px",
-          fontFamily: "var(--font-mono, monospace)",
-          fontSize: "0.75rem",
-          background: "var(--bg-card, white)",
-          padding: "6px 12px",
-          border: "2px solid var(--border-strong, #333)",
-          boxShadow: "2px 2px 0px 0px var(--border-strong, #333)",
-          borderRadius: "4px",
-          pointerEvents: "none",
-        }}
-      >
+      {/* Controls overlay */}
+      <div className="absolute bottom-4 right-4 flex gap-2 font-mono text-xs
+                      bg-card text-foreground/60 px-3 py-1.5 border-2 border-foreground pointer-events-none"
+           style={{ boxShadow: "2px 2px 0px 0px rgba(255,255,255,0.12)" }}>
         <span>Zoom: {Math.round(zoom * 100)}%</span>
-        <span>•</span>
+        <span className="text-foreground/30">•</span>
         <span>Drag to pan / Hover edges</span>
       </div>
     </div>
