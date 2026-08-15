@@ -95,17 +95,18 @@ Content:
             response = await self.model.generate_content_async(prompt)
             raw_text = response.text or ""
             cleaned_text = raw_text.strip()
-            if cleaned_text.startswith("```json"):
-                cleaned_text = cleaned_text[7:]
-            if cleaned_text.endswith("```"):
-                cleaned_text = cleaned_text[:-3]
-            cleaned_text = cleaned_text.strip()
+            
+            # Find the JSON block boundaries
+            start_idx = cleaned_text.find("{")
+            end_idx = cleaned_text.rfind("}")
+            if start_idx != -1 and end_idx != -1:
+                cleaned_text = cleaned_text[start_idx:end_idx + 1]
 
             import json
             data = json.loads(cleaned_text)
             return data.get("flashcards", [])
         except Exception as e:
-            logger.error(f"Failed to synthesize flashcards: {e}")
+            logger.error(f"Failed to synthesize flashcards: {e}. Raw response: {response.text if 'response' in locals() else ''}")
             return []
 
 
