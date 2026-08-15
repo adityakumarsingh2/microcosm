@@ -98,7 +98,7 @@ export function StudyView({ accessToken, workspaceId }: StudyViewProps) {
           }}>
             <Check size={28} />
           </div>
-          <h2 style={{ fontSize: "1.2rem", fontWeight: "bold", textAlign: "center", color: "var(--text-1)" }}>
+          <h2 style={{ fontSize: "1.2rem", fontWeight: "bold", textAlign: "center", color: "var(--text, #f0ede8)" }}>
             Zero Cards Due!
           </h2>
           <p style={{ fontSize: "0.85rem", color: "var(--text-2)", textAlign: "center", maxWidth: "340px", lineHeight: "1.5" }}>
@@ -115,7 +115,7 @@ export function StudyView({ accessToken, workspaceId }: StudyViewProps) {
           </div>
 
           {/* Flashcard container (Neo-Brutalist clickable box) */}
-          <button
+          <div
             onClick={handleCardClick}
             style={{
               width: "100%",
@@ -125,38 +125,39 @@ export function StudyView({ accessToken, workspaceId }: StudyViewProps) {
               flexDirection: "column",
               alignItems: "center",
               justifyContent: "center",
-              background: isFlipped ? "var(--bg-soft)" : "var(--bg-card, white)",
-              border: `2px solid ${isFlipped ? "var(--purple)" : "var(--border-strong)"}`,
+              background: isFlipped ? "var(--surface-hover, #1a1a1f)" : "var(--surface-raised, #111116)",
+              border: `2px solid ${isFlipped ? "var(--purple, #a673ff)" : "var(--border-strong, rgba(255, 255, 255, 0.24))"}`,
               borderRadius: "12px",
-              boxShadow: `5px 5px 0px 0px ${isFlipped ? "var(--purple)" : "var(--border-strong)"}`,
+              boxShadow: `5px 5px 0px 0px ${isFlipped ? "var(--purple, #a673ff)" : "var(--border-strong, rgba(255, 255, 255, 0.24))"}`,
               padding: "32px",
               cursor: "pointer",
-              transition: "transform 0.15s ease",
-              textAlign: "center"
+              transition: "transform 0.15s ease, background 0.15s ease",
+              textAlign: "center",
+              userSelect: "none"
             }}
           >
             {isFlipped ? (
               // Flipped state
               <div>
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.6rem", textTransform: "uppercase", letterSpacing: "1px", color: "var(--purple)", display: "block", marginBottom: "8px" }}>
-                  answer
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "1px", color: "var(--purple, #a673ff)", display: "block", marginBottom: "12px" }}>
+                  // answer
                 </span>
-                <p style={{ fontSize: "1.05rem", fontWeight: "bold", color: "var(--text-1)", lineHeight: "1.5", margin: 0 }}>
+                <p style={{ fontSize: "1.05rem", fontWeight: "bold", color: "var(--text, #f0ede8)", lineHeight: "1.5", margin: 0 }}>
                   {activeCard.back}
                 </p>
               </div>
             ) : (
               // Default Front state
               <div>
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.6rem", textTransform: "uppercase", letterSpacing: "1px", color: "var(--dim)", display: "block", marginBottom: "8px" }}>
-                  question (click to flip)
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "1px", color: "var(--muted, #8a8a8a)", display: "block", marginBottom: "12px" }}>
+                  // question (click to flip)
                 </span>
-                <p style={{ fontSize: "1.05rem", fontWeight: "bold", color: "var(--text-1)", lineHeight: "1.5", margin: 0 }}>
+                <p style={{ fontSize: "1.05rem", fontWeight: "bold", color: "var(--text, #f0ede8)", lineHeight: "1.5", margin: 0 }}>
                   {activeCard.front}
                 </p>
               </div>
             )}
-          </button>
+          </div>
 
           {/* Review actions / SM-2 score trigger selectors */}
           {isFlipped ? (
