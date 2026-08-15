@@ -327,7 +327,17 @@ export function MicrocosmEditor({
     }
   }
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  const wordCount = editor ? (editor.getText().trim() ? editor.getText().trim().split(/\s+/).length : 0) : 0;
+  const charCount = editor ? editor.getText().length : 0;
+  const [isCopied, setIsCopied] = useState(false);
+
+  const handleCopyMarkdown = () => {
+    if (!editor) return;
+    const text = editor.getText();
+    navigator.clipboard.writeText(text);
+    setIsCopied(true);
+    setTimeout(() => setIsCopied(false), 2000);
+  };
 
   const effectiveSaveState: SaveState = isSaving ? "saving" : saveState;
 
@@ -352,6 +362,9 @@ export function MicrocosmEditor({
           {knowledgeStatus && knowledgeStatus !== "not_indexed" && (
             <KnowledgePill status={knowledgeStatus} />
           )}
+          <span className="text-[10px] text-muted-foreground/60 hidden sm:inline">
+            {wordCount} words · {charCount} chars
+          </span>
         </div>
 
         <div className="flex items-center gap-2">
@@ -364,6 +377,23 @@ export function MicrocosmEditor({
           </span>
 
           <div className="w-px h-4 bg-foreground/10 flex-shrink-0" />
+
+          {/* Copy markdown */}
+          <button
+            disabled={!editor || wordCount === 0}
+            onClick={handleCopyMarkdown}
+            title="Copy plain text/markdown"
+            className="inline-flex items-center gap-1.5 min-h-[26px] px-2.5 border border-foreground/10
+                       rounded-none bg-transparent text-foreground/50 text-[11px]
+                       hover:border-foreground/25 hover:bg-secondary/50 hover:text-foreground
+                       disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+          >
+            {isCopied ? (
+              <><CheckCircle2 size={11} className="text-emerald-400" /> Copied</>
+            ) : (
+              <>Copy text</>
+            )}
+          </button>
 
           {/* Image upload */}
           <button

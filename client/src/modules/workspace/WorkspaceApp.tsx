@@ -27,9 +27,13 @@ import {
   User,
   MessageSquare,
   BookOpen,
+  PanelLeftClose,
+  PanelLeftOpen,
+  FilePlus,
 } from "lucide-react";
 import { useAuth } from "../auth/AuthProvider";
 import { MicrocosmEditor } from "../editor/MicrocosmEditor";
+import { CommandPaletteModal } from "./CommandPaletteModal";
 import {
   createNotebook,
   createPage,
@@ -285,6 +289,8 @@ export function WorkspaceApp() {
   const [viewMode, setViewMode]       = useState<"editor" | "graph" | "study">("editor");
   const [copiedMessageIndex, setCopiedMessageIndex]   = useState<number | null>(null);
   const [insertedMessageIndex, setInsertedMessageIndex] = useState<number | null>(null);
+  const [commandPaletteOpen, setCommandPaletteOpen]   = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed]       = useState(false);
 
   const handleCopyMessage = (text: string, index: number) => {
     navigator.clipboard.writeText(text);
@@ -296,6 +302,35 @@ export function WorkspaceApp() {
     window.dispatchEvent(new CustomEvent("insert-ai-text", { detail: { text } }));
     setInsertedMessageIndex(index);
     setTimeout(() => setInsertedMessageIndex(null), 2000);
+  };
+
+  const handleSaveChatToPage = () => {
+    if (!activeSectionId || chatHistory.length === 0) return;
+    const blocks: PageBlock[] = chatHistory.flatMap((msg, i) => [
+      {
+        blockId: `chat-header-${i}`,
+        type: "heading",
+        content: msg.role === "user" ? `User Query: ${msg.content}` : `AI Companion Response`,
+        properties: { level: msg.role === "user" ? 2 : 3 },
+        position: (i * 2 + 1) * 1000,
+      },
+      {
+        blockId: `chat-body-${i}`,
+        type: "paragraph",
+        content: msg.content,
+        properties: {},
+        position: (i * 2 + 2) * 1000,
+      },
+    ]);
+    createPage(accessToken!, activeSectionId, {
+      title: `AI Insights — ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+      emoji: "🤖",
+      blocks,
+    }).then((res) => {
+      setActivePageId(res.data.page.id);
+      void queryClient.invalidateQueries({ queryKey: ["pages", activeSectionId] });
+      alert("Exported AI chat conversation to a new page!");
+    });
   };
 
   useEffect(() => {
@@ -639,46 +674,86 @@ export function WorkspaceApp() {
   return (
     <main className="flex min-h-screen bg-background text-foreground font-sans">
 
+      {/* Command Palette Modal (Ctrl+K) */}
+      <CommandPaletteModal
+        isOpen={commandPaletteOpen}
+        onClose={() => setCommandPaletteOpen(false)}
+        notebooks={notebooks}
+        sections={sections}
+        pages={pages}
+        onSelectPage={(nbId, secId, pgId) => {
+          setActiveNotebookId(nbId);
+          setActiveSectionId(secId);
+          setActivePageId(pgId);
+        }}
+        onSelectView={setViewMode}
+      />
+
       {/* ── SIDEBAR ──────────────────────────────────────────────────────── */}
-      <aside className="flex flex-col sticky top-0 h-screen w-[272px] flex-shrink-0
+      <aside className={`flex flex-col sticky top-0 h-screen flex-shrink-0
                         border-r border-foreground/8 overflow-y-auto
-                        scrollbar-thin custom-scrollbar"
+                        scrollbar-thin custom-scrollbar transition-all duration-200
+                        ${sidebarCollapsed ? "w-16" : "w-[272px]"}`}
              style={{ background: "rgba(4,4,5,0.96)", backdropFilter: "blur(24px)" }}>
 
         {/* Brand row */}
         <div className="flex items-center justify-between px-4 py-4 border-b border-foreground/8 flex-shrink-0 mb-2">
-          <span className="font-mono text-[0.92rem] font-black tracking-tight text-foreground">
-            <span className="text-blue-400">&lt;</span>
-            Microcosm
-            <span className="text-blue-400"> /&gt;</span>
-          </span>
-          <button
-            className="grid place-items-center w-7 h-7 border border-foreground/15 text-muted-foreground
-                       hover:border-foreground/30 hover:text-foreground transition-all"
-            aria-label="New space"
-            onClick={() => createWorkspaceMutation.mutate()}
-            disabled={createWorkspaceMutation.isPending}
-          >
-            <Plus size={13} />
-          </button>
+          {!sidebarCollapsed && (
+            <span className="font-mono text-[0.92rem] font-black tracking-tight text-foreground">
+              <span className="text-blue-400">&lt;</span>
+              Microcosm
+              <span className="text-blue-400"> /&gt;</span>
+            </span>
+          )}
+          <div className="flex items-center gap-1 ml-auto">
+            <button
+              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+              className="grid place-items-center w-7 h-7 border border-foreground/15 text-muted-foreground
+                         hover:border-foreground/30 hover:text-foreground transition-all"
+              title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            >
+              {sidebarCollapsed ? <PanelLeftOpen size={13} /> : <PanelLeftClose size={13} />}
+            </button>
+            {!sidebarCollapsed && (
+              <button
+                className="grid place-items-center w-7 h-7 border border-foreground/15 text-muted-foreground
+                           hover:border-foreground/30 hover:text-foreground transition-all"
+                aria-label="New space"
+                onClick={() => createWorkspaceMutation.mutate()}
+                disabled={createWorkspaceMutation.isPending}
+              >
+                <Plus size={13} />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Primary nav */}
         <nav className="flex flex-col gap-0.5 px-2 pb-3 border-b border-foreground/8 mb-1">
-          {[
-            { icon: <Home size={14} />, label: "Home" },
-            { icon: <Search size={14} />, label: "Search" },
-            { icon: <Bot size={14} />, label: "Companion" },
-          ].map(({ icon, label }) => (
-            <a
-              key={label}
-              href="#"
-              className="flex items-center gap-2.5 min-h-[33px] px-2.5 text-muted-foreground text-[0.87rem]
-                         hover:text-foreground hover:bg-foreground/5 transition-all rounded-none"
-            >
-              {icon} {label}
-            </a>
-          ))}
+          <button
+            onClick={() => setViewMode("editor")}
+            className="flex items-center gap-2.5 min-h-[33px] px-2.5 text-muted-foreground text-[0.87rem]
+                       hover:text-foreground hover:bg-foreground/5 transition-all rounded-none text-left"
+          >
+            <Home size={14} /> {!sidebarCollapsed && "Home"}
+          </button>
+          <button
+            onClick={() => setCommandPaletteOpen(true)}
+            className="flex items-center justify-between min-h-[33px] px-2.5 text-muted-foreground text-[0.87rem]
+                       hover:text-foreground hover:bg-foreground/5 transition-all rounded-none text-left"
+          >
+            <span className="flex items-center gap-2.5"><Search size={14} /> {!sidebarCollapsed && "Search"}</span>
+            {!sidebarCollapsed && (
+              <span className="font-mono text-[9px] border border-foreground/20 px-1 py-0.5 text-foreground/40 font-bold">Ctrl+K</span>
+            )}
+          </button>
+          <button
+            onClick={() => setCompanionOpen((o) => !o)}
+            className="flex items-center gap-2.5 min-h-[33px] px-2.5 text-muted-foreground text-[0.87rem]
+                       hover:text-foreground hover:bg-foreground/5 transition-all rounded-none text-left"
+          >
+            <Bot size={14} /> {!sidebarCollapsed && "Companion"}
+          </button>
         </nav>
 
         {/* Library tree */}
@@ -1162,6 +1237,15 @@ export function WorkspaceApp() {
                   </div>
 
                   <div className="flex items-center gap-1">
+                    {chatHistory.length > 0 && activeSectionId && (
+                      <button
+                        onClick={handleSaveChatToPage}
+                        className="w-7 h-7 flex items-center justify-center hover:bg-card border border-transparent hover:border-foreground/20 transition-all text-purple-400 hover:text-purple-300"
+                        title="Export AI conversation as a new note page"
+                      >
+                        <FilePlus className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                     {chatHistory.length > 0 && (
                       <button
                         onClick={() => setChatHistory([])}
