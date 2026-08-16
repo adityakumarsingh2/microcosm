@@ -39,6 +39,7 @@ export type Page = {
   emoji: string;
   blocks: PageBlock[];
   status: string;
+  tags?: string[];
   knowledgeStatus: "not_indexed" | "pending" | "indexed" | "failed";
   createdAt: string;
   updatedAt: string;

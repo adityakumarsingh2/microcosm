@@ -122,7 +122,7 @@ export const renderItems = () => {
         popup[0].hide();
         return true;
       }
-      return component.ref?.onKeyDown(props);
+      return (component.ref as any)?.onKeyDown(props);
     },
 
     onExit() {
