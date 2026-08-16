@@ -64,6 +64,8 @@ import { KnowledgeGraph } from "./KnowledgeGraph";
 import { generateFlashcards as apiGenerateFlashcards } from "../study/study.api";
 import { StudyView } from "./StudyView";
 import { MayIHelpYouPopup } from "../../shared/MayIHelpYouPopup";
+import { ConfirmDeleteModal } from "../../shared/ConfirmDeleteModal";
+import { CreateItemModal } from "../../shared/CreateItemModal";
 
 const emptyBlocks: PageBlock[] = [];
 
@@ -291,6 +293,21 @@ export function WorkspaceApp() {
   const [insertedMessageIndex, setInsertedMessageIndex] = useState<number | null>(null);
   const [commandPaletteOpen, setCommandPaletteOpen]   = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed]       = useState(false);
+
+  // Creation & Deletion modal states
+  const [createModal, setCreateModal] = useState<{
+    isOpen: boolean;
+    itemType: "notebook" | "section" | "page";
+    targetId?: string;
+  }>({ isOpen: false, itemType: "page" });
+
+  const [deleteModal, setDeleteModal] = useState<{
+    isOpen: boolean;
+    itemType: "notebook" | "section" | "page" | "document" | "workspace";
+    id: string;
+    title: string;
+    description?: string;
+  }>({ isOpen: false, itemType: "page", id: "", title: "" });
 
   const handleCopyMessage = (text: string, index: number) => {
     navigator.clipboard.writeText(text);
@@ -579,10 +596,12 @@ export function WorkspaceApp() {
   });
 
   const createNotebookMutation = useMutation({
-    mutationFn: () => createNotebook(accessToken!, activeWorkspaceId!, { title: "New Notebook" }),
+    mutationFn: (title?: string) =>
+      createNotebook(accessToken!, activeWorkspaceId!, { title: title || "New Notebook" }),
     onSuccess: (result) => {
       setActiveNotebookId(result.data.notebook.id);
       void queryClient.invalidateQueries({ queryKey: ["notebooks", activeWorkspaceId] });
+      setCreateModal({ isOpen: false, itemType: "notebook" });
     },
   });
 
@@ -596,14 +615,17 @@ export function WorkspaceApp() {
     onSuccess: (_, deletedId) => {
       void queryClient.invalidateQueries({ queryKey: ["notebooks", activeWorkspaceId] });
       if (activeNotebookId === deletedId) { setActiveNotebookId(null); setActiveSectionId(null); setActivePageId(null); }
+      setDeleteModal({ isOpen: false, itemType: "notebook", id: "", title: "" });
     },
   });
 
   const createSectionMutation = useMutation({
-    mutationFn: () => createSection(accessToken!, activeNotebookId!, { title: "New Section" }),
+    mutationFn: ({ notebookId, title }: { notebookId?: string; title?: string }) =>
+      createSection(accessToken!, notebookId || activeNotebookId!, { title: title || "New Section" }),
     onSuccess: (result) => {
       setActiveSectionId(result.data.section.id);
-      void queryClient.invalidateQueries({ queryKey: ["sections", activeNotebookId] });
+      void queryClient.invalidateQueries({ queryKey: ["sections", result.data.section.notebookId] });
+      setCreateModal({ isOpen: false, itemType: "section" });
     },
   });
 
@@ -617,14 +639,21 @@ export function WorkspaceApp() {
     onSuccess: (_, deletedId) => {
       void queryClient.invalidateQueries({ queryKey: ["sections", activeNotebookId] });
       if (activeSectionId === deletedId) { setActiveSectionId(null); setActivePageId(null); }
+      setDeleteModal({ isOpen: false, itemType: "section", id: "", title: "" });
     },
   });
 
   const createPageMutation = useMutation({
-    mutationFn: () => createPage(accessToken!, activeSectionId!, { title: "Untitled Page", emoji: "", blocks: emptyBlocks }),
+    mutationFn: ({ sectionId, title, emoji }: { sectionId?: string; title?: string; emoji?: string }) =>
+      createPage(accessToken!, sectionId || activeSectionId!, {
+        title: title || "Untitled Page",
+        emoji: emoji || "",
+        blocks: emptyBlocks,
+      }),
     onSuccess: (result) => {
       setActivePageId(result.data.page.id);
-      void queryClient.invalidateQueries({ queryKey: ["pages", activeSectionId] });
+      void queryClient.invalidateQueries({ queryKey: ["pages", result.data.page.sectionId] });
+      setCreateModal({ isOpen: false, itemType: "page" });
     },
   });
 
@@ -641,6 +670,7 @@ export function WorkspaceApp() {
     onSuccess: (_, deletedId) => {
       void queryClient.invalidateQueries({ queryKey: ["pages", activeSectionId] });
       if (activePageId === deletedId) setActivePageId(null);
+      setDeleteModal({ isOpen: false, itemType: "page", id: "", title: "" });
     },
   });
 
@@ -674,6 +704,39 @@ export function WorkspaceApp() {
   return (
     <main className="flex min-h-screen bg-background text-foreground font-sans">
 
+      {/* Creation Modal */}
+      <CreateItemModal
+        isOpen={createModal.isOpen}
+        itemType={createModal.itemType}
+        isPending={createNotebookMutation.isPending || createSectionMutation.isPending || createPageMutation.isPending}
+        onClose={() => setCreateModal((prev) => ({ ...prev, isOpen: false }))}
+        onConfirm={(title, emoji) => {
+          if (createModal.itemType === "notebook") {
+            createNotebookMutation.mutate(title);
+          } else if (createModal.itemType === "section") {
+            createSectionMutation.mutate({ notebookId: createModal.targetId, title });
+          } else if (createModal.itemType === "page") {
+            createPageMutation.mutate({ sectionId: createModal.targetId, title, emoji });
+          }
+        }}
+      />
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmDeleteModal
+        isOpen={deleteModal.isOpen}
+        title={deleteModal.title}
+        description={deleteModal.description || "This action cannot be undone."}
+        itemType={deleteModal.itemType}
+        isPending={deleteNotebookMutation.isPending || deleteSectionMutation.isPending || deletePageMutation.isPending || deleteDocumentMutation.isPending}
+        onClose={() => setDeleteModal((prev) => ({ ...prev, isOpen: false }))}
+        onConfirm={() => {
+          if (deleteModal.itemType === "notebook") deleteNotebookMutation.mutate(deleteModal.id);
+          else if (deleteModal.itemType === "section") deleteSectionMutation.mutate(deleteModal.id);
+          else if (deleteModal.itemType === "page") deletePageMutation.mutate(deleteModal.id);
+          else if (deleteModal.itemType === "document") deleteDocumentMutation.mutate(deleteModal.id);
+        }}
+      />
+
       {/* Command Palette Modal (Ctrl+K) */}
       <CommandPaletteModal
         isOpen={commandPaletteOpen}
@@ -693,24 +756,27 @@ export function WorkspaceApp() {
       <aside className={`flex flex-col sticky top-0 h-screen flex-shrink-0
                         border-r border-foreground/8 overflow-y-auto
                         scrollbar-thin custom-scrollbar transition-all duration-200
-                        ${sidebarCollapsed ? "w-16" : "w-[272px]"}`}
+                        ${sidebarCollapsed ? "w-16 items-center px-2" : "w-[272px] px-0"}`}
              style={{ background: "rgba(4,4,5,0.96)", backdropFilter: "blur(24px)" }}>
 
         {/* Brand row */}
-        <div className="flex items-center justify-between px-4 py-4 border-b border-foreground/8 flex-shrink-0 mb-2">
-          {!sidebarCollapsed && (
+        <div className={`flex items-center border-b border-foreground/8 flex-shrink-0 py-4 mb-2
+                        ${sidebarCollapsed ? "justify-center w-full" : "justify-between px-4"}`}>
+          {!sidebarCollapsed ? (
             <span className="font-mono text-[0.92rem] font-black tracking-tight text-foreground">
               <span className="text-blue-400">&lt;</span>
               Microcosm
               <span className="text-blue-400"> /&gt;</span>
             </span>
+          ) : (
+            <span className="font-mono text-sm font-black text-blue-400" title="Microcosm">&lt;M/&gt;</span>
           )}
-          <div className="flex items-center gap-1 ml-auto">
+          <div className="flex items-center gap-1">
             <button
               onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
               className="grid place-items-center w-7 h-7 border border-foreground/15 text-muted-foreground
                          hover:border-foreground/30 hover:text-foreground transition-all"
-              title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+              title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar (Focus Mode)"}
             >
               {sidebarCollapsed ? <PanelLeftOpen size={13} /> : <PanelLeftClose size={13} />}
             </button>
@@ -718,9 +784,9 @@ export function WorkspaceApp() {
               <button
                 className="grid place-items-center w-7 h-7 border border-foreground/15 text-muted-foreground
                            hover:border-foreground/30 hover:text-foreground transition-all"
-                aria-label="New space"
-                onClick={() => createWorkspaceMutation.mutate()}
-                disabled={createWorkspaceMutation.isPending}
+                aria-label="New notebook"
+                title="Create Notebook"
+                onClick={() => setCreateModal({ isOpen: true, itemType: "notebook" })}
               >
                 <Plus size={13} />
               </button>
@@ -729,18 +795,23 @@ export function WorkspaceApp() {
         </div>
 
         {/* Primary nav */}
-        <nav className="flex flex-col gap-0.5 px-2 pb-3 border-b border-foreground/8 mb-1">
+        <nav className={`flex flex-col gap-0.5 pb-3 border-b border-foreground/8 mb-1
+                        ${sidebarCollapsed ? "w-full items-center px-0" : "px-2"}`}>
           <button
             onClick={() => setViewMode("editor")}
-            className="flex items-center gap-2.5 min-h-[33px] px-2.5 text-muted-foreground text-[0.87rem]
-                       hover:text-foreground hover:bg-foreground/5 transition-all rounded-none text-left"
+            title="Home"
+            className={`flex items-center min-h-[33px] text-muted-foreground text-[0.87rem]
+                       hover:text-foreground hover:bg-foreground/5 transition-all rounded-none
+                       ${sidebarCollapsed ? "justify-center w-8 h-8 px-0" : "gap-2.5 px-2.5 w-full text-left"}`}
           >
             <Home size={14} /> {!sidebarCollapsed && "Home"}
           </button>
           <button
             onClick={() => setCommandPaletteOpen(true)}
-            className="flex items-center justify-between min-h-[33px] px-2.5 text-muted-foreground text-[0.87rem]
-                       hover:text-foreground hover:bg-foreground/5 transition-all rounded-none text-left"
+            title="Search (Ctrl+K)"
+            className={`flex items-center text-muted-foreground text-[0.87rem]
+                       hover:text-foreground hover:bg-foreground/5 transition-all rounded-none
+                       ${sidebarCollapsed ? "justify-center w-8 h-8 px-0 min-h-[33px]" : "justify-between gap-2.5 px-2.5 min-h-[33px] w-full text-left"}`}
           >
             <span className="flex items-center gap-2.5"><Search size={14} /> {!sidebarCollapsed && "Search"}</span>
             {!sidebarCollapsed && (
@@ -749,251 +820,311 @@ export function WorkspaceApp() {
           </button>
           <button
             onClick={() => setCompanionOpen((o) => !o)}
-            className="flex items-center gap-2.5 min-h-[33px] px-2.5 text-muted-foreground text-[0.87rem]
-                       hover:text-foreground hover:bg-foreground/5 transition-all rounded-none text-left"
+            title="AI Companion"
+            className={`flex items-center min-h-[33px] text-muted-foreground text-[0.87rem]
+                       hover:text-foreground hover:bg-foreground/5 transition-all rounded-none
+                       ${sidebarCollapsed ? "justify-center w-8 h-8 px-0" : "gap-2.5 px-2.5 w-full text-left"}`}
           >
             <Bot size={14} /> {!sidebarCollapsed && "Companion"}
           </button>
         </nav>
 
         {/* Library tree */}
-        <div className="flex-1 min-h-0 overflow-y-auto px-2 pt-3 custom-scrollbar">
-          <div className="flex items-center justify-between px-1 mb-1.5">
-            <span className="font-mono text-[0.67rem] font-bold tracking-widest uppercase text-foreground/30">
-              // library
-            </span>
-            {activeWorkspaceId && (
-              <button
-                className="grid place-items-center w-5 h-5 border border-foreground/12 text-foreground/30
-                           hover:border-foreground/25 hover:text-foreground transition-all"
-                disabled={createNotebookMutation.isPending}
-                onClick={() => createNotebookMutation.mutate()}
-              >
-                <Plus size={10} />
-              </button>
-            )}
-          </div>
-
-          {activeWorkspaceId && notebooks.length === 0 && !notebooksQuery.isLoading && (
-            <div className="border border-dashed border-foreground/10 p-2.5 mb-2">
-              <p className="text-foreground/30 text-xs mb-2">No notebooks yet.</p>
-              <button
-                onClick={() => createNotebookMutation.mutate()}
-                disabled={createNotebookMutation.isPending}
-                className="text-xs text-blue-400 border border-blue-400/25 px-2.5 py-1 hover:bg-blue-400/8 transition-all"
-              >
-                + New notebook
-              </button>
-            </div>
-          )}
-
-          <div className="flex flex-col gap-px">
-            {notebooks.map((notebook) => (
-              <div key={notebook.id}>
-                {/* Notebook row */}
-                <div className={`flex items-center w-full min-h-[33px] group
-                                 ${notebook.id === activeNotebookId ? "bg-foreground/5 text-foreground" : "text-foreground/65 hover:bg-foreground/4 hover:text-foreground/85"}
-                                 transition-all`}>
+        <div className={`flex-1 min-h-0 overflow-y-auto pt-3 custom-scrollbar
+                        ${sidebarCollapsed ? "w-full px-0 flex flex-col items-center" : "px-2"}`}>
+          {!sidebarCollapsed ? (
+            /* Expanded Library */
+            <>
+              <div className="flex items-center justify-between px-1 mb-1.5">
+                <span className="font-mono text-[0.67rem] font-bold tracking-widest uppercase text-foreground/30">
+                  // library
+                </span>
+                {activeWorkspaceId && (
                   <button
-                    className="flex items-center gap-1.5 flex-1 min-w-0 px-2 py-1.5 text-[0.87rem] font-semibold text-left"
-                    onClick={() => { setActiveNotebookId(notebook.id); setActiveSectionId(null); setActivePageId(null); }}
+                    className="grid place-items-center w-5 h-5 border border-foreground/12 text-foreground/30
+                               hover:border-foreground/25 hover:text-foreground transition-all"
+                    title="Create Notebook"
+                    onClick={() => setCreateModal({ isOpen: true, itemType: "notebook" })}
                   >
-                    <ChevronDown size={11} className="flex-shrink-0 transition-transform"
-                      style={{ transform: notebook.id === activeNotebookId ? "rotate(0deg)" : "rotate(-90deg)" }} />
-                    <BookOpen size={12} className="flex-shrink-0" />
-                    {renamingItemId === notebook.id ? (
-                      <input autoFocus className="inline-rename-input flex-1"
-                        value={renameDraft} onChange={(e) => setRenameDraft(e.target.value)}
-                        onBlur={() => setRenamingItemId(null)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && renameDraft.trim()) updateNotebookMutation.mutate({ title: renameDraft.trim() });
-                          if (e.key === "Escape") setRenamingItemId(null);
-                        }} />
-                    ) : (
-                      <span className="truncate">{notebook.title}</span>
-                    )}
+                    <Plus size={10} />
                   </button>
-                  <div className="hidden group-hover:flex items-center gap-px pr-1.5">
-                    <button onClick={() => startRenaming(notebook.id, notebook.title)}
-                      className="grid place-items-center w-5 h-5 text-foreground/40 hover:text-foreground transition-colors">
-                      <Edit2 size={10} />
-                    </button>
-                    <button onClick={() => { if (window.confirm("Delete this notebook?")) deleteNotebookMutation.mutate(notebook.id); }}
-                      disabled={deleteNotebookMutation.isPending}
-                      className="grid place-items-center w-5 h-5 text-red-500/60 hover:text-red-400 transition-colors">
-                      <Trash2 size={10} />
-                    </button>
-                    {notebook.id === activeNotebookId && (
-                      <button onClick={() => createSectionMutation.mutate()} disabled={createSectionMutation.isPending}
-                        className="grid place-items-center w-5 h-5 text-blue-400/60 hover:text-blue-400 transition-colors">
-                        <Plus size={10} />
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {/* Sections */}
-                {notebook.id === activeNotebookId && (
-                  <div className="ml-4 border-l border-foreground/8 pl-2 flex flex-col gap-px mt-0.5 mb-1">
-                    {sections.map((section) => (
-                      <div key={section.id}>
-                        <div className={`flex items-center w-full min-h-[29px] group
-                                         ${section.id === activeSectionId ? "text-foreground/85" : "text-foreground/45 hover:text-foreground/70"}
-                                         transition-all`}>
-                          <button
-                            className="flex items-center gap-1.5 flex-1 min-w-0 px-2 py-1 text-[0.83rem] text-left"
-                            onClick={() => { setActiveSectionId(section.id); setActivePageId(null); }}
-                          >
-                            <Folder size={11} className="flex-shrink-0" />
-                            {renamingItemId === section.id ? (
-                              <input autoFocus className="inline-rename-input flex-1"
-                                value={renameDraft} onChange={(e) => setRenameDraft(e.target.value)}
-                                onBlur={() => setRenamingItemId(null)}
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter" && renameDraft.trim()) updateSectionMutation.mutate({ title: renameDraft.trim() });
-                                  if (e.key === "Escape") setRenamingItemId(null);
-                                }} />
-                            ) : (
-                              <span className="truncate">{section.title}</span>
-                            )}
-                          </button>
-                          <div className="hidden group-hover:flex items-center gap-px pr-1">
-                            <button onClick={() => startRenaming(section.id, section.title)}
-                              className="grid place-items-center w-4.5 h-4.5 text-foreground/35 hover:text-foreground transition-colors">
-                              <Edit2 size={9} />
-                            </button>
-                            <button onClick={() => { if (window.confirm("Delete this section?")) deleteSectionMutation.mutate(section.id); }}
-                              disabled={deleteSectionMutation.isPending}
-                              className="grid place-items-center w-4.5 h-4.5 text-red-500/50 hover:text-red-400 transition-colors">
-                              <Trash2 size={9} />
-                            </button>
-                            {section.id === activeSectionId && (
-                              <button onClick={() => createPageMutation.mutate()} disabled={createPageMutation.isPending}
-                                className="grid place-items-center w-4.5 h-4.5 text-blue-400/50 hover:text-blue-400 transition-colors">
-                                <Plus size={9} />
-                              </button>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Pages */}
-                        {section.id === activeSectionId && (
-                          <div className="ml-3.5 border-l border-foreground/6 pl-2 flex flex-col gap-px mt-0.5 mb-1">
-                            {pages.map((page) => (
-                              <div key={page.id}
-                                className={`flex items-center min-h-[27px] relative group
-                                             ${page.id === activePageId ? "text-foreground" : "text-foreground/35 hover:text-foreground/60"}
-                                             transition-all`}>
-                                {page.id === activePageId && (
-                                  <div className="absolute -left-2.5 top-1/2 -translate-y-1/2 w-0.5 h-3.5 bg-[hsl(var(--orange))]" />
-                                )}
-                                <button
-                                  className="flex items-center gap-1.5 flex-1 min-w-0 px-2 py-1 text-[0.81rem] text-left"
-                                  onClick={() => setActivePageId(page.id)}
-                                >
-                                  <FileText size={10} className="flex-shrink-0" />
-                                  <span className="truncate">{page.title}</span>
-                                </button>
-                                <button
-                                  onClick={() => { if (window.confirm("Delete this page?")) deletePageMutation.mutate(page.id); }}
-                                  disabled={deletePageMutation.isPending}
-                                  className="hidden group-hover:grid place-items-center w-4 h-4 mr-1 text-red-500/50 hover:text-red-400 transition-colors">
-                                  <Trash2 size={9} />
-                                </button>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
                 )}
               </div>
-            ))}
-          </div>
+
+              {activeWorkspaceId && notebooks.length === 0 && !notebooksQuery.isLoading && (
+                <div className="border border-dashed border-foreground/10 p-2.5 mb-2">
+                  <p className="text-foreground/30 text-xs mb-2">No notebooks yet.</p>
+                  <button
+                    onClick={() => setCreateModal({ isOpen: true, itemType: "notebook" })}
+                    className="text-xs text-blue-400 border border-blue-400/25 px-2.5 py-1 hover:bg-blue-400/8 transition-all"
+                  >
+                    + New notebook
+                  </button>
+                </div>
+              )}
+
+              <div className="flex flex-col gap-px">
+                {notebooks.map((notebook) => (
+                  <div key={notebook.id}>
+                    {/* Notebook row */}
+                    <div className={`flex items-center w-full min-h-[33px] group
+                                     ${notebook.id === activeNotebookId ? "bg-foreground/5 text-foreground" : "text-foreground/65 hover:bg-foreground/4 hover:text-foreground/85"}
+                                     transition-all`}>
+                      <button
+                        className="flex items-center gap-1.5 flex-1 min-w-0 px-2 py-1.5 text-[0.87rem] font-semibold text-left"
+                        onClick={() => { setActiveNotebookId(notebook.id); setActiveSectionId(null); setActivePageId(null); }}
+                      >
+                        <ChevronDown size={11} className="flex-shrink-0 transition-transform"
+                          style={{ transform: notebook.id === activeNotebookId ? "rotate(0deg)" : "rotate(-90deg)" }} />
+                        <BookOpen size={12} className="flex-shrink-0 text-orange-400" />
+                        {renamingItemId === notebook.id ? (
+                          <input autoFocus className="inline-rename-input flex-1"
+                            value={renameDraft} onChange={(e) => setRenameDraft(e.target.value)}
+                            onBlur={() => setRenamingItemId(null)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" && renameDraft.trim()) updateNotebookMutation.mutate({ title: renameDraft.trim() });
+                              if (e.key === "Escape") setRenamingItemId(null);
+                            }} />
+                        ) : (
+                          <span className="truncate">{notebook.title}</span>
+                        )}
+                      </button>
+                      <div className="hidden group-hover:flex items-center gap-px pr-1.5">
+                        <button onClick={() => startRenaming(notebook.id, notebook.title)} title="Rename"
+                          className="grid place-items-center w-5 h-5 text-foreground/40 hover:text-foreground transition-colors">
+                          <Edit2 size={10} />
+                        </button>
+                        <button onClick={() => setDeleteModal({ isOpen: true, itemType: "notebook", id: notebook.id, title: notebook.title })} title="Delete Notebook"
+                          className="grid place-items-center w-5 h-5 text-red-500/60 hover:text-red-400 transition-colors">
+                          <Trash2 size={10} />
+                        </button>
+                        {notebook.id === activeNotebookId && (
+                          <button onClick={() => setCreateModal({ isOpen: true, itemType: "section", targetId: notebook.id })} title="Create Section"
+                            className="grid place-items-center w-5 h-5 text-blue-400/60 hover:text-blue-400 transition-colors">
+                            <Plus size={10} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Sections */}
+                    {notebook.id === activeNotebookId && (
+                      <div className="ml-4 border-l border-foreground/8 pl-2 flex flex-col gap-px mt-0.5 mb-1">
+                        {sections.map((section) => (
+                          <div key={section.id}>
+                            <div className={`flex items-center w-full min-h-[29px] group
+                                             ${section.id === activeSectionId ? "text-foreground/85" : "text-foreground/45 hover:text-foreground/70"}
+                                             transition-all`}>
+                              <button
+                                className="flex items-center gap-1.5 flex-1 min-w-0 px-2 py-1 text-[0.83rem] text-left"
+                                onClick={() => { setActiveSectionId(section.id); setActivePageId(null); }}
+                              >
+                                <Folder size={11} className="flex-shrink-0 text-blue-400" />
+                                {renamingItemId === section.id ? (
+                                  <input autoFocus className="inline-rename-input flex-1"
+                                    value={renameDraft} onChange={(e) => setRenameDraft(e.target.value)}
+                                    onBlur={() => setRenamingItemId(null)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter" && renameDraft.trim()) updateSectionMutation.mutate({ title: renameDraft.trim() });
+                                      if (e.key === "Escape") setRenamingItemId(null);
+                                    }} />
+                                ) : (
+                                  <span className="truncate">{section.title}</span>
+                                )}
+                              </button>
+                              <div className="hidden group-hover:flex items-center gap-px pr-1">
+                                <button onClick={() => startRenaming(section.id, section.title)} title="Rename"
+                                  className="grid place-items-center w-4.5 h-4.5 text-foreground/35 hover:text-foreground transition-colors">
+                                  <Edit2 size={9} />
+                                </button>
+                                <button onClick={() => setDeleteModal({ isOpen: true, itemType: "section", id: section.id, title: section.title })} title="Delete Section"
+                                  className="grid place-items-center w-4.5 h-4.5 text-red-500/50 hover:text-red-400 transition-colors">
+                                  <Trash2 size={9} />
+                                </button>
+                                {section.id === activeSectionId && (
+                                  <button onClick={() => setCreateModal({ isOpen: true, itemType: "page", targetId: section.id })} title="Create Page"
+                                    className="grid place-items-center w-4.5 h-4.5 text-blue-400/50 hover:text-blue-400 transition-colors">
+                                    <Plus size={9} />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Pages */}
+                            {section.id === activeSectionId && (
+                              <div className="ml-3.5 border-l border-foreground/6 pl-2 flex flex-col gap-px mt-0.5 mb-1">
+                                {pages.map((page) => (
+                                  <div key={page.id}
+                                    className={`flex items-center min-h-[27px] relative group
+                                                 ${page.id === activePageId ? "text-foreground font-semibold" : "text-foreground/35 hover:text-foreground/60"}
+                                                 transition-all`}>
+                                    {page.id === activePageId && (
+                                      <div className="absolute -left-2.5 top-1/2 -translate-y-1/2 w-0.5 h-3.5 bg-[hsl(var(--orange))]" />
+                                    )}
+                                    <button
+                                      className="flex items-center gap-1.5 flex-1 min-w-0 px-2 py-1 text-[0.81rem] text-left"
+                                      onClick={() => setActivePageId(page.id)}
+                                    >
+                                      {page.emoji ? <span className="text-xs">{page.emoji}</span> : <FileText size={10} className="flex-shrink-0 text-purple-400" />}
+                                      <span className="truncate">{page.title}</span>
+                                    </button>
+                                    <button
+                                      onClick={() => setDeleteModal({ isOpen: true, itemType: "page", id: page.id, title: page.title })}
+                                      title="Delete Page"
+                                      className="hidden group-hover:grid place-items-center w-4 h-4 mr-1 text-red-500/50 hover:text-red-400 transition-colors">
+                                      <Trash2 size={9} />
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            /* Collapsed Library Icon Bar */
+            <div className="flex flex-col items-center gap-2 w-full py-1">
+              <button
+                onClick={() => setCreateModal({ isOpen: true, itemType: "notebook" })}
+                title="Create Notebook"
+                className="w-8 h-8 grid place-items-center border border-foreground/15 text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-all"
+              >
+                <Plus size={13} />
+              </button>
+              <div className="w-6 h-px bg-foreground/10 my-1" />
+              {notebooks.map((notebook) => (
+                <button
+                  key={notebook.id}
+                  onClick={() => { setActiveNotebookId(notebook.id); setActiveSectionId(null); setActivePageId(null); }}
+                  title={`Notebook: ${notebook.title}`}
+                  className={`w-8 h-8 grid place-items-center transition-all ${
+                    notebook.id === activeNotebookId
+                      ? "bg-foreground/10 text-orange-400 border border-orange-400/40"
+                      : "text-foreground/45 hover:text-foreground hover:bg-foreground/5"
+                  }`}
+                >
+                  <BookOpen size={14} />
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Documents section */}
-        <div className="px-2 pt-3 border-t border-foreground/10 mt-2">
-          <div className="flex items-center justify-between px-1 mb-1.5">
-            <span className="font-mono text-[0.67rem] font-bold tracking-widest uppercase text-foreground/30">
-              // documents
-            </span>
-            {activeWorkspaceId && (
+        <div className={`pt-3 border-t border-foreground/10 mt-2 ${sidebarCollapsed ? "w-full px-0 flex flex-col items-center" : "px-2"}`}>
+          {!sidebarCollapsed ? (
+            <>
+              <div className="flex items-center justify-between px-1 mb-1.5">
+                <span className="font-mono text-[0.67rem] font-bold tracking-widest uppercase text-foreground/30">
+                  // documents
+                </span>
+                {activeWorkspaceId && (
+                  <button
+                    className="grid place-items-center w-5 h-5 border border-foreground/12 text-foreground/30
+                               hover:border-foreground/25 hover:text-foreground transition-all"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploadDocumentMutation.isPending}
+                    title="Upload PDF Document"
+                  >
+                    <Plus size={10} />
+                  </button>
+                )}
+              </div>
+
+              <input type="file" ref={fileInputRef} className="hidden" accept=".pdf" onChange={handleFileChange} />
+
+              {activeWorkspaceId && documents.length === 0 && !documentsQuery.isLoading && (
+                <div className="border border-dashed border-foreground/10 p-2.5 mb-2">
+                  <p className="text-foreground/30 text-xs mb-2">No documents yet.</p>
+                  <button onClick={() => fileInputRef.current?.click()} disabled={uploadDocumentMutation.isPending}
+                    className="text-xs text-blue-400 border border-blue-400/25 px-2.5 py-1 hover:bg-blue-400/8 transition-all">
+                    + Upload PDF
+                  </button>
+                </div>
+              )}
+
+              <div className="flex flex-col gap-1.5 pb-2">
+                {documents.map((doc) => (
+                  <div key={doc.id}
+                    className="flex items-center justify-between px-2 py-1.5 border border-foreground/10 bg-foreground/2 gap-2">
+                    <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                      <FileText size={10} className="flex-shrink-0 text-foreground/30" />
+                      <span className="text-[0.77rem] font-mono text-foreground/55 truncate" title={doc.title}>
+                        {doc.title}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      {(doc.status === "pending" || doc.status === "processing") ? (
+                        <span className="text-[0.55rem] font-mono font-bold px-1.5 py-0.5 border border-blue-400/30 text-blue-400">syncing</span>
+                      ) : doc.status === "indexed" ? (
+                        <span className="text-[0.55rem] font-mono font-bold px-1.5 py-0.5 border border-emerald-500/30 text-emerald-400">ready</span>
+                      ) : (
+                        <span className="text-[0.55rem] font-mono font-bold px-1.5 py-0.5 border border-red-500/30 text-red-400">failed</span>
+                      )}
+                      <button
+                        onClick={() => setDeleteModal({ isOpen: true, itemType: "document", id: doc.id, title: doc.title })}
+                        title="Delete Document"
+                        className="text-foreground/25 hover:text-red-400 transition-colors">
+                        <Trash2 size={10} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="flex flex-col items-center gap-1 py-1">
               <button
-                className="grid place-items-center w-5 h-5 border border-foreground/12 text-foreground/30
-                           hover:border-foreground/25 hover:text-foreground transition-all"
                 onClick={() => fileInputRef.current?.click()}
-                disabled={uploadDocumentMutation.isPending}
+                title="Upload PDF Document"
+                className="w-8 h-8 grid place-items-center text-foreground/40 hover:text-foreground hover:bg-foreground/5 transition-all"
               >
-                <Plus size={10} />
-              </button>
-            )}
-          </div>
-
-          <input type="file" ref={fileInputRef} className="hidden" accept=".pdf" onChange={handleFileChange} />
-
-          {activeWorkspaceId && documents.length === 0 && !documentsQuery.isLoading && (
-            <div className="border border-dashed border-foreground/10 p-2.5 mb-2">
-              <p className="text-foreground/30 text-xs mb-2">No documents yet.</p>
-              <button onClick={() => fileInputRef.current?.click()} disabled={uploadDocumentMutation.isPending}
-                className="text-xs text-blue-400 border border-blue-400/25 px-2.5 py-1 hover:bg-blue-400/8 transition-all">
-                + Upload PDF
+                <FileText size={14} />
               </button>
             </div>
           )}
-
-          <div className="flex flex-col gap-1.5 pb-2">
-            {documents.map((doc) => (
-              <div key={doc.id}
-                className="flex items-center justify-between px-2 py-1.5 border border-foreground/10 bg-foreground/2 gap-2">
-                <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                  <FileText size={10} className="flex-shrink-0 text-foreground/30" />
-                  <span className="text-[0.77rem] font-mono text-foreground/55 truncate" title={doc.title}>
-                    {doc.title}
-                  </span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  {(doc.status === "pending" || doc.status === "processing") ? (
-                    <span className="text-[0.55rem] font-mono font-bold px-1.5 py-0.5 border border-blue-400/30 text-blue-400">syncing</span>
-                  ) : doc.status === "indexed" ? (
-                    <span className="text-[0.55rem] font-mono font-bold px-1.5 py-0.5 border border-emerald-500/30 text-emerald-400">ready</span>
-                  ) : (
-                    <span className="text-[0.55rem] font-mono font-bold px-1.5 py-0.5 border border-red-500/30 text-red-400">failed</span>
-                  )}
-                  <button
-                    onClick={() => { if (window.confirm("Delete this document?")) deleteDocumentMutation.mutate(doc.id); }}
-                    className="text-foreground/25 hover:text-red-400 transition-colors">
-                    <Trash2 size={10} />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
         </div>
 
         {/* Footer */}
-        <div className="mt-auto pt-3 border-t border-foreground/8 px-2 pb-3 flex-shrink-0 flex flex-col gap-1">
-          <div className="flex items-center gap-2.5 px-2 py-2.5 border border-foreground/10 bg-foreground/2 mb-1">
-            <div className="grid place-items-center w-7 h-7 bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-black flex-shrink-0">
-              {user?.name?.slice(0, 1).toUpperCase() ?? "M"}
-            </div>
-            <div className="min-w-0">
-              <strong className="block text-[0.83rem] font-semibold text-foreground truncate">{user?.name ?? "Microcosm User"}</strong>
-              <small className="block text-[0.71rem] text-foreground/35 truncate">{user?.email}</small>
-            </div>
-          </div>
-          <a href="#"
-            className="flex items-center gap-2 min-h-[30px] px-2.5 text-foreground/45 text-[0.85rem]
-                       hover:text-foreground hover:bg-foreground/5 transition-all">
-            <Settings size={13} /> Settings
-          </a>
-          <button
-            onClick={() => void logout()}
-            className="flex items-center gap-2 min-h-[30px] px-2.5 text-foreground/45 text-[0.85rem]
-                       hover:text-foreground hover:bg-foreground/5 transition-all text-left">
-            <LogOut size={13} /> Logout
-          </button>
+        <div className={`mt-auto pt-3 border-t border-foreground/8 pb-3 flex-shrink-0 flex flex-col gap-1
+                        ${sidebarCollapsed ? "w-full items-center px-0" : "px-2"}`}>
+          {!sidebarCollapsed ? (
+            <>
+              <div className="flex items-center gap-2.5 px-2 py-2.5 border border-foreground/10 bg-foreground/2 mb-1">
+                <div className="grid place-items-center w-7 h-7 bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-black flex-shrink-0">
+                  {user?.name?.slice(0, 1).toUpperCase() ?? "M"}
+                </div>
+                <div className="min-w-0">
+                  <strong className="block text-[0.83rem] font-semibold text-foreground truncate">{user?.name ?? "Microcosm User"}</strong>
+                  <small className="block text-[0.71rem] text-foreground/35 truncate">{user?.email}</small>
+                </div>
+              </div>
+              <a href="#"
+                className="flex items-center gap-2 min-h-[30px] px-2.5 text-foreground/45 text-[0.85rem]
+                           hover:text-foreground hover:bg-foreground/5 transition-all">
+                <Settings size={13} /> Settings
+              </a>
+              <button
+                onClick={() => void logout()}
+                className="flex items-center gap-2 min-h-[30px] px-2.5 text-foreground/45 text-[0.85rem]
+                           hover:text-foreground hover:bg-foreground/5 transition-all text-left">
+                <LogOut size={13} /> Logout
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={() => void logout()}
+              title={`Logout (${user?.email})`}
+              className="w-8 h-8 grid place-items-center text-foreground/45 hover:text-red-400 hover:bg-foreground/5 transition-all"
+            >
+              <LogOut size={14} />
+            </button>
+          )}
         </div>
       </aside>
 
