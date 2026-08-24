@@ -111,15 +111,22 @@ const onboardingBlocks: PageBlock[] = [
 function OnboardingOverlay({ onStart, isPending }: { onStart: (name: string) => void; isPending: boolean }) {
   const [name, setName] = useState("Personal");
   return (
-    <div className="fixed inset-0 flex items-center justify-center bg-background/90 backdrop-blur-sm z-50 font-sans">
+    <div className="fixed inset-0 flex items-center justify-center z-50 font-sans"
+         style={{ background: "rgba(5,5,10,0.75)", backdropFilter: "blur(20px)" }}>
       <motion.div
-        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+        initial={{ opacity: 0, scale: 0.94, y: 24 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
-        transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-        className="w-full max-w-sm p-8 bg-card border-2 border-foreground text-foreground"
-        style={{ boxShadow: "8px 8px 0px 0px rgba(255,255,255,0.12)" }}
+        transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+        className="w-full max-w-sm p-8 text-foreground rounded-2xl"
+        style={{
+          background: "rgba(14,14,22,0.85)",
+          border: "1px solid rgba(255,255,255,0.10)",
+          backdropFilter: "blur(28px)",
+          boxShadow: "0 24px 64px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05)",
+        }}
       >
-        <div className="flex items-center justify-center w-12 h-12 mb-6 border-2 border-foreground text-[hsl(var(--orange))]">
+        <div className="flex items-center justify-center w-12 h-12 mb-6 rounded-xl text-[hsl(var(--orange))]"
+             style={{ background: "rgba(240,125,42,0.12)", boxShadow: "0 0 20px rgba(240,125,42,0.15)" }}>
           <Sparkles size={22} />
         </div>
         <h2 className="font-serif text-2xl font-bold mb-2 text-foreground">Welcome to Microcosm</h2>
@@ -127,8 +134,7 @@ function OnboardingOverlay({ onStart, isPending }: { onStart: (name: string) => 
           Let's set up your first notebook. What area of knowledge will you start with?
         </p>
         <input
-          className="w-full bg-background border-2 border-foreground/25 focus:border-foreground px-3 py-2.5
-                     text-sm text-foreground placeholder:text-muted-foreground outline-none mb-4 transition-colors"
+          className="input-smooth mb-4"
           value={name}
           onChange={(e) => setName(e.target.value)}
           autoFocus
@@ -137,11 +143,10 @@ function OnboardingOverlay({ onStart, isPending }: { onStart: (name: string) => 
           placeholder="e.g. Personal, Engineering, Research…"
         />
         <button
-          className="flex items-center justify-center gap-2 w-full min-h-[42px] px-6
-                     bg-foreground text-background border-2 border-foreground font-bold text-sm
-                     hover:bg-secondary hover:text-foreground disabled:opacity-40
-                     hover:-translate-y-0.5 active:translate-y-0 transition-all"
-          style={{ boxShadow: "3px 3px 0px 0px rgba(255,255,255,0.15)" }}
+          className="flex items-center justify-center gap-2 w-full min-h-[42px] px-6 rounded-xl
+                     font-bold text-sm text-white disabled:opacity-40
+                     hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200"
+          style={{ background: "var(--gradient-warm)", boxShadow: "var(--shadow-sm), var(--glow-orange)" }}
           onClick={() => onStart(name)}
           disabled={isPending}
         >
@@ -754,14 +759,19 @@ export function WorkspaceApp() {
 
       {/* ── SIDEBAR ──────────────────────────────────────────────────────── */}
       <aside className={`flex flex-col sticky top-0 h-screen flex-shrink-0
-                        border-r border-foreground/8 overflow-y-auto
-                        scrollbar-thin custom-scrollbar transition-all duration-200
+                        overflow-y-auto scrollbar-thin custom-scrollbar
+                        transition-all duration-300
                         ${sidebarCollapsed ? "w-16 items-center px-2" : "w-[272px] px-0"}`}
-             style={{ background: "rgba(4,4,5,0.96)", backdropFilter: "blur(24px)" }}>
+             style={{
+               background: "linear-gradient(180deg, rgba(12,12,18,0.97) 0%, rgba(8,8,13,0.99) 100%)",
+               backdropFilter: "blur(28px)",
+               borderRight: "1px solid rgba(255,255,255,0.055)",
+             }}>
 
         {/* Brand row */}
-        <div className={`flex items-center border-b border-foreground/8 flex-shrink-0 py-4 mb-2
-                        ${sidebarCollapsed ? "justify-center w-full" : "justify-between px-4"}`}>
+        <div className={`flex items-center flex-shrink-0 py-4 mb-2
+                        ${sidebarCollapsed ? "justify-center w-full" : "justify-between px-4"}`}
+             style={{ borderBottom: "1px solid rgba(255,255,255,0.055)" }}>
           {!sidebarCollapsed ? (
             <span className="font-mono text-[0.92rem] font-black tracking-tight text-foreground">
               <span className="text-blue-400">&lt;</span>
@@ -774,16 +784,16 @@ export function WorkspaceApp() {
           <div className="flex items-center gap-1">
             <button
               onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-              className="grid place-items-center w-7 h-7 border border-foreground/15 text-muted-foreground
-                         hover:border-foreground/30 hover:text-foreground transition-all"
+              className="grid place-items-center w-7 h-7 rounded-lg text-muted-foreground
+                         hover:bg-white/6 hover:text-foreground transition-all duration-150"
               title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar (Focus Mode)"}
             >
               {sidebarCollapsed ? <PanelLeftOpen size={13} /> : <PanelLeftClose size={13} />}
             </button>
             {!sidebarCollapsed && (
               <button
-                className="grid place-items-center w-7 h-7 border border-foreground/15 text-muted-foreground
-                           hover:border-foreground/30 hover:text-foreground transition-all"
+                className="grid place-items-center w-7 h-7 rounded-lg text-muted-foreground
+                           hover:bg-white/6 hover:text-foreground transition-all duration-150"
                 aria-label="New notebook"
                 title="Create Notebook"
                 onClick={() => setCreateModal({ isOpen: true, itemType: "notebook" })}
@@ -795,35 +805,37 @@ export function WorkspaceApp() {
         </div>
 
         {/* Primary nav */}
-        <nav className={`flex flex-col gap-0.5 pb-3 border-b border-foreground/8 mb-1
-                        ${sidebarCollapsed ? "w-full items-center px-0" : "px-2"}`}>
+        <nav className={`flex flex-col gap-0.5 pb-3 mb-1
+                        ${sidebarCollapsed ? "w-full items-center px-0" : "px-2"}`}
+             style={{ borderBottom: "1px solid rgba(255,255,255,0.055)" }}>
           <button
             onClick={() => setViewMode("editor")}
             title="Home"
-            className={`flex items-center min-h-[33px] text-muted-foreground text-[0.87rem]
-                       hover:text-foreground hover:bg-foreground/5 transition-all rounded-none
-                       ${sidebarCollapsed ? "justify-center w-8 h-8 px-0" : "gap-2.5 px-2.5 w-full text-left"}`}
+            className={`flex items-center text-[0.87rem] rounded-lg transition-all duration-150
+                       text-muted-foreground hover:text-foreground hover:bg-white/5
+                       ${sidebarCollapsed ? "justify-center w-9 h-9 px-0" : "gap-2.5 px-2.5 min-h-[34px] w-full text-left"}`}
           >
             <Home size={14} /> {!sidebarCollapsed && "Home"}
           </button>
           <button
             onClick={() => setCommandPaletteOpen(true)}
             title="Search (Ctrl+K)"
-            className={`flex items-center text-muted-foreground text-[0.87rem]
-                       hover:text-foreground hover:bg-foreground/5 transition-all rounded-none
-                       ${sidebarCollapsed ? "justify-center w-8 h-8 px-0 min-h-[33px]" : "justify-between gap-2.5 px-2.5 min-h-[33px] w-full text-left"}`}
+            className={`flex items-center text-[0.87rem] rounded-lg transition-all duration-150
+                       text-muted-foreground hover:text-foreground hover:bg-white/5
+                       ${sidebarCollapsed ? "justify-center w-9 h-9 px-0" : "justify-between gap-2.5 px-2.5 min-h-[34px] w-full text-left"}`}
           >
             <span className="flex items-center gap-2.5"><Search size={14} /> {!sidebarCollapsed && "Search"}</span>
             {!sidebarCollapsed && (
-              <span className="font-mono text-[9px] border border-foreground/20 px-1 py-0.5 text-foreground/40 font-bold">Ctrl+K</span>
+              <span className="font-mono text-[9px] rounded-md px-1.5 py-0.5 text-foreground/35 font-bold"
+                    style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.08)" }}>Ctrl+K</span>
             )}
           </button>
           <button
             onClick={() => setCompanionOpen((o) => !o)}
             title="AI Companion"
-            className={`flex items-center min-h-[33px] text-muted-foreground text-[0.87rem]
-                       hover:text-foreground hover:bg-foreground/5 transition-all rounded-none
-                       ${sidebarCollapsed ? "justify-center w-8 h-8 px-0" : "gap-2.5 px-2.5 w-full text-left"}`}
+            className={`flex items-center text-[0.87rem] rounded-lg transition-all duration-150
+                       text-muted-foreground hover:text-foreground hover:bg-white/5
+                       ${sidebarCollapsed ? "justify-center w-9 h-9 px-0" : "gap-2.5 px-2.5 min-h-[34px] w-full text-left"}`}
           >
             <Bot size={14} /> {!sidebarCollapsed && "Companion"}
           </button>
@@ -836,13 +848,13 @@ export function WorkspaceApp() {
             /* Expanded Library */
             <>
               <div className="flex items-center justify-between px-1 mb-1.5">
-                <span className="font-mono text-[0.67rem] font-bold tracking-widest uppercase text-foreground/30">
-                  // library
+                <span className="text-[0.65rem] font-bold tracking-widest uppercase text-foreground/25 px-1">
+                  Library
                 </span>
                 {activeWorkspaceId && (
                   <button
-                    className="grid place-items-center w-5 h-5 border border-foreground/12 text-foreground/30
-                               hover:border-foreground/25 hover:text-foreground transition-all"
+                    className="grid place-items-center w-5 h-5 rounded-md text-foreground/30
+                               hover:bg-white/6 hover:text-foreground transition-all duration-150"
                     title="Create Notebook"
                     onClick={() => setCreateModal({ isOpen: true, itemType: "notebook" })}
                   >
@@ -852,11 +864,12 @@ export function WorkspaceApp() {
               </div>
 
               {activeWorkspaceId && notebooks.length === 0 && !notebooksQuery.isLoading && (
-                <div className="border border-dashed border-foreground/10 p-2.5 mb-2">
+                <div className="rounded-xl p-3 mb-2" style={{ border: "1px dashed rgba(255,255,255,0.10)" }}>
                   <p className="text-foreground/30 text-xs mb-2">No notebooks yet.</p>
                   <button
                     onClick={() => setCreateModal({ isOpen: true, itemType: "notebook" })}
-                    className="text-xs text-blue-400 border border-blue-400/25 px-2.5 py-1 hover:bg-blue-400/8 transition-all"
+                    className="text-xs text-blue-400 rounded-lg px-2.5 py-1 hover:bg-blue-400/10 transition-all duration-150"
+                    style={{ border: "1px solid rgba(96,165,250,0.25)" }}
                   >
                     + New notebook
                   </button>
@@ -867,14 +880,18 @@ export function WorkspaceApp() {
                 {notebooks.map((notebook) => (
                   <div key={notebook.id}>
                     {/* Notebook row */}
-                    <div className={`flex items-center w-full min-h-[33px] group
-                                     ${notebook.id === activeNotebookId ? "bg-foreground/5 text-foreground" : "text-foreground/65 hover:bg-foreground/4 hover:text-foreground/85"}
-                                     transition-all`}>
+                    <div className={`flex items-center w-full min-h-[33px] group rounded-lg
+                                     ${notebook.id === activeNotebookId ? "text-foreground" : "text-foreground/60 hover:text-foreground/85"}
+                                     transition-all duration-150`}
+                         style={{ background: notebook.id === activeNotebookId ? "rgba(255,255,255,0.07)" : "transparent" }}
+                         onMouseEnter={(e) => { if (notebook.id !== activeNotebookId) (e.currentTarget as HTMLDivElement).style.background = "rgba(255,255,255,0.04)"; }}
+                         onMouseLeave={(e) => { if (notebook.id !== activeNotebookId) (e.currentTarget as HTMLDivElement).style.background = "transparent"; }}
+                    >
                       <button
                         className="flex items-center gap-1.5 flex-1 min-w-0 px-2 py-1.5 text-[0.87rem] font-semibold text-left"
                         onClick={() => { setActiveNotebookId(notebook.id); setActiveSectionId(null); setActivePageId(null); }}
                       >
-                        <ChevronDown size={11} className="flex-shrink-0 transition-transform"
+                        <ChevronDown size={11} className="flex-shrink-0 transition-transform duration-200"
                           style={{ transform: notebook.id === activeNotebookId ? "rotate(0deg)" : "rotate(-90deg)" }} />
                         <BookOpen size={12} className="flex-shrink-0 text-orange-400" />
                         {renamingItemId === notebook.id ? (
@@ -891,16 +908,16 @@ export function WorkspaceApp() {
                       </button>
                       <div className="hidden group-hover:flex items-center gap-px pr-1.5">
                         <button onClick={() => startRenaming(notebook.id, notebook.title)} title="Rename"
-                          className="grid place-items-center w-5 h-5 text-foreground/40 hover:text-foreground transition-colors">
+                          className="grid place-items-center w-5 h-5 rounded text-foreground/40 hover:text-foreground hover:bg-white/8 transition-all duration-100">
                           <Edit2 size={10} />
                         </button>
                         <button onClick={() => setDeleteModal({ isOpen: true, itemType: "notebook", id: notebook.id, title: notebook.title })} title="Delete Notebook"
-                          className="grid place-items-center w-5 h-5 text-red-500/60 hover:text-red-400 transition-colors">
+                          className="grid place-items-center w-5 h-5 rounded text-red-500/60 hover:text-red-400 hover:bg-red-500/8 transition-all duration-100">
                           <Trash2 size={10} />
                         </button>
                         {notebook.id === activeNotebookId && (
                           <button onClick={() => setCreateModal({ isOpen: true, itemType: "section", targetId: notebook.id })} title="Create Section"
-                            className="grid place-items-center w-5 h-5 text-blue-400/60 hover:text-blue-400 transition-colors">
+                            className="grid place-items-center w-5 h-5 rounded text-blue-400/60 hover:text-blue-400 hover:bg-blue-400/8 transition-all duration-100">
                             <Plus size={10} />
                           </button>
                         )}
@@ -912,9 +929,10 @@ export function WorkspaceApp() {
                       <div className="ml-4 border-l border-foreground/8 pl-2 flex flex-col gap-px mt-0.5 mb-1">
                         {sections.map((section) => (
                           <div key={section.id}>
-                            <div className={`flex items-center w-full min-h-[29px] group
-                                             ${section.id === activeSectionId ? "text-foreground/85" : "text-foreground/45 hover:text-foreground/70"}
-                                             transition-all`}>
+                            <div className={`flex items-center w-full min-h-[29px] group rounded-md
+                                             ${section.id === activeSectionId ? "text-foreground/90" : "text-foreground/45 hover:text-foreground/70"}
+                                             transition-all duration-150`}
+                                 style={{ background: section.id === activeSectionId ? "rgba(255,255,255,0.05)" : "transparent" }}>
                               <button
                                 className="flex items-center gap-1.5 flex-1 min-w-0 px-2 py-1 text-[0.83rem] text-left"
                                 onClick={() => { setActiveSectionId(section.id); setActivePageId(null); }}
@@ -934,16 +952,16 @@ export function WorkspaceApp() {
                               </button>
                               <div className="hidden group-hover:flex items-center gap-px pr-1">
                                 <button onClick={() => startRenaming(section.id, section.title)} title="Rename"
-                                  className="grid place-items-center w-4.5 h-4.5 text-foreground/35 hover:text-foreground transition-colors">
+                                  className="grid place-items-center w-4.5 h-4.5 rounded text-foreground/35 hover:text-foreground hover:bg-white/8 transition-all duration-100">
                                   <Edit2 size={9} />
                                 </button>
                                 <button onClick={() => setDeleteModal({ isOpen: true, itemType: "section", id: section.id, title: section.title })} title="Delete Section"
-                                  className="grid place-items-center w-4.5 h-4.5 text-red-500/50 hover:text-red-400 transition-colors">
+                                  className="grid place-items-center w-4.5 h-4.5 rounded text-red-500/50 hover:text-red-400 hover:bg-red-500/8 transition-all duration-100">
                                   <Trash2 size={9} />
                                 </button>
                                 {section.id === activeSectionId && (
                                   <button onClick={() => setCreateModal({ isOpen: true, itemType: "page", targetId: section.id })} title="Create Page"
-                                    className="grid place-items-center w-4.5 h-4.5 text-blue-400/50 hover:text-blue-400 transition-colors">
+                                    className="grid place-items-center w-4.5 h-4.5 rounded text-blue-400/50 hover:text-blue-400 hover:bg-blue-400/8 transition-all duration-100">
                                     <Plus size={9} />
                                   </button>
                                 )}
@@ -955,11 +973,13 @@ export function WorkspaceApp() {
                               <div className="ml-3.5 border-l border-foreground/6 pl-2 flex flex-col gap-px mt-0.5 mb-1">
                                 {pages.map((page) => (
                                   <div key={page.id}
-                                    className={`flex items-center min-h-[27px] relative group
-                                                 ${page.id === activePageId ? "text-foreground font-semibold" : "text-foreground/35 hover:text-foreground/60"}
-                                                 transition-all`}>
+                                    className={`flex items-center min-h-[27px] relative group rounded-md
+                                                 ${page.id === activePageId ? "text-foreground font-semibold" : "text-foreground/35 hover:text-foreground/65"}
+                                                 transition-all duration-150`}
+                                    style={{ background: page.id === activePageId ? "rgba(240,125,42,0.10)" : "transparent" }}>
                                     {page.id === activePageId && (
-                                      <div className="absolute -left-2.5 top-1/2 -translate-y-1/2 w-0.5 h-3.5 bg-[hsl(var(--orange))]" />
+                                      <div className="absolute -left-2.5 top-1/2 -translate-y-1/2 w-0.5 h-3 rounded-full"
+                                           style={{ background: "hsl(var(--orange))", boxShadow: "0 0 6px rgba(240,125,42,0.5)" }} />
                                     )}
                                     <button
                                       className="flex items-center gap-1.5 flex-1 min-w-0 px-2 py-1 text-[0.81rem] text-left"
@@ -971,7 +991,7 @@ export function WorkspaceApp() {
                                     <button
                                       onClick={() => setDeleteModal({ isOpen: true, itemType: "page", id: page.id, title: page.title })}
                                       title="Delete Page"
-                                      className="hidden group-hover:grid place-items-center w-4 h-4 mr-1 text-red-500/50 hover:text-red-400 transition-colors">
+                                      className="hidden group-hover:grid place-items-center w-4 h-4 mr-1 rounded text-red-500/50 hover:text-red-400 hover:bg-red-500/8 transition-all duration-100">
                                       <Trash2 size={9} />
                                     </button>
                                   </div>
@@ -1016,17 +1036,18 @@ export function WorkspaceApp() {
         </div>
 
         {/* Documents section */}
-        <div className={`pt-3 border-t border-foreground/10 mt-2 ${sidebarCollapsed ? "w-full px-0 flex flex-col items-center" : "px-2"}`}>
+        <div className={`pt-3 mt-2 ${sidebarCollapsed ? "w-full px-0 flex flex-col items-center" : "px-2"}`}
+             style={{ borderTop: "1px solid rgba(255,255,255,0.055)" }}>
           {!sidebarCollapsed ? (
             <>
               <div className="flex items-center justify-between px-1 mb-1.5">
-                <span className="font-mono text-[0.67rem] font-bold tracking-widest uppercase text-foreground/30">
-                  // documents
+                <span className="text-[0.65rem] font-bold tracking-widest uppercase text-foreground/25 px-1">
+                  Documents
                 </span>
                 {activeWorkspaceId && (
                   <button
-                    className="grid place-items-center w-5 h-5 border border-foreground/12 text-foreground/30
-                               hover:border-foreground/25 hover:text-foreground transition-all"
+                    className="grid place-items-center w-5 h-5 rounded-md text-foreground/30
+                               hover:bg-white/6 hover:text-foreground transition-all duration-150"
                     onClick={() => fileInputRef.current?.click()}
                     disabled={uploadDocumentMutation.isPending}
                     title="Upload PDF Document"
@@ -1039,10 +1060,11 @@ export function WorkspaceApp() {
               <input type="file" ref={fileInputRef} className="hidden" accept=".pdf" onChange={handleFileChange} />
 
               {activeWorkspaceId && documents.length === 0 && !documentsQuery.isLoading && (
-                <div className="border border-dashed border-foreground/10 p-2.5 mb-2">
+                <div className="rounded-xl p-3 mb-2" style={{ border: "1px dashed rgba(255,255,255,0.10)" }}>
                   <p className="text-foreground/30 text-xs mb-2">No documents yet.</p>
                   <button onClick={() => fileInputRef.current?.click()} disabled={uploadDocumentMutation.isPending}
-                    className="text-xs text-blue-400 border border-blue-400/25 px-2.5 py-1 hover:bg-blue-400/8 transition-all">
+                    className="text-xs text-blue-400 rounded-lg px-2.5 py-1 hover:bg-blue-400/10 transition-all duration-150"
+                    style={{ border: "1px solid rgba(96,165,250,0.25)" }}>
                     + Upload PDF
                   </button>
                 </div>
@@ -1051,7 +1073,8 @@ export function WorkspaceApp() {
               <div className="flex flex-col gap-1.5 pb-2">
                 {documents.map((doc) => (
                   <div key={doc.id}
-                    className="flex items-center justify-between px-2 py-1.5 border border-foreground/10 bg-foreground/2 gap-2">
+                    className="flex items-center justify-between px-2 py-1.5 rounded-lg gap-2 transition-all duration-150"
+                    style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
                     <div className="flex items-center gap-1.5 min-w-0 flex-1">
                       <FileText size={10} className="flex-shrink-0 text-foreground/30" />
                       <span className="text-[0.77rem] font-mono text-foreground/55 truncate" title={doc.title}>
@@ -1060,16 +1083,16 @@ export function WorkspaceApp() {
                     </div>
                     <div className="flex items-center gap-1.5">
                       {(doc.status === "pending" || doc.status === "processing") ? (
-                        <span className="text-[0.55rem] font-mono font-bold px-1.5 py-0.5 border border-blue-400/30 text-blue-400">syncing</span>
+                        <span className="text-[0.55rem] font-mono font-bold px-1.5 py-0.5 rounded-full border border-blue-400/30 text-blue-400">syncing</span>
                       ) : doc.status === "indexed" ? (
-                        <span className="text-[0.55rem] font-mono font-bold px-1.5 py-0.5 border border-emerald-500/30 text-emerald-400">ready</span>
+                        <span className="text-[0.55rem] font-mono font-bold px-1.5 py-0.5 rounded-full border border-emerald-500/30 text-emerald-400">ready</span>
                       ) : (
-                        <span className="text-[0.55rem] font-mono font-bold px-1.5 py-0.5 border border-red-500/30 text-red-400">failed</span>
+                        <span className="text-[0.55rem] font-mono font-bold px-1.5 py-0.5 rounded-full border border-red-500/30 text-red-400">failed</span>
                       )}
                       <button
                         onClick={() => setDeleteModal({ isOpen: true, itemType: "document", id: doc.id, title: doc.title })}
                         title="Delete Document"
-                        className="text-foreground/25 hover:text-red-400 transition-colors">
+                        className="text-foreground/25 hover:text-red-400 transition-colors rounded">
                         <Trash2 size={10} />
                       </button>
                     </div>
@@ -1091,12 +1114,15 @@ export function WorkspaceApp() {
         </div>
 
         {/* Footer */}
-        <div className={`mt-auto pt-3 border-t border-foreground/8 pb-3 flex-shrink-0 flex flex-col gap-1
-                        ${sidebarCollapsed ? "w-full items-center px-0" : "px-2"}`}>
+        <div className={`mt-auto pt-3 pb-3 flex-shrink-0 flex flex-col gap-1
+                        ${sidebarCollapsed ? "w-full items-center px-0" : "px-2"}`}
+             style={{ borderTop: "1px solid rgba(255,255,255,0.055)" }}>
           {!sidebarCollapsed ? (
             <>
-              <div className="flex items-center gap-2.5 px-2 py-2.5 border border-foreground/10 bg-foreground/2 mb-1">
-                <div className="grid place-items-center w-7 h-7 bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-black flex-shrink-0">
+              <div className="flex items-center gap-2.5 px-2 py-2.5 rounded-xl mb-1 transition-all duration-150"
+                   style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)" }}>
+                <div className="grid place-items-center w-7 h-7 rounded-full text-blue-200 text-xs font-black flex-shrink-0"
+                     style={{ background: "linear-gradient(135deg, rgba(59,130,246,0.25) 0%, rgba(99,102,241,0.25) 100%)", border: "1px solid rgba(96,165,250,0.2)" }}>
                   {user?.name?.slice(0, 1).toUpperCase() ?? "M"}
                 </div>
                 <div className="min-w-0">
@@ -1105,14 +1131,14 @@ export function WorkspaceApp() {
                 </div>
               </div>
               <a href="#"
-                className="flex items-center gap-2 min-h-[30px] px-2.5 text-foreground/45 text-[0.85rem]
-                           hover:text-foreground hover:bg-foreground/5 transition-all">
+                className="flex items-center gap-2 min-h-[30px] px-2.5 rounded-lg text-foreground/45 text-[0.85rem]
+                           hover:text-foreground hover:bg-white/5 transition-all duration-150">
                 <Settings size={13} /> Settings
               </a>
               <button
                 onClick={() => void logout()}
-                className="flex items-center gap-2 min-h-[30px] px-2.5 text-foreground/45 text-[0.85rem]
-                           hover:text-foreground hover:bg-foreground/5 transition-all text-left">
+                className="flex items-center gap-2 min-h-[30px] px-2.5 rounded-lg text-foreground/45 text-[0.85rem]
+                           hover:text-foreground hover:bg-white/5 transition-all duration-150 text-left">
                 <LogOut size={13} /> Logout
               </button>
             </>
@@ -1120,7 +1146,7 @@ export function WorkspaceApp() {
             <button
               onClick={() => void logout()}
               title={`Logout (${user?.email})`}
-              className="w-8 h-8 grid place-items-center text-foreground/45 hover:text-red-400 hover:bg-foreground/5 transition-all"
+              className="w-8 h-8 grid place-items-center rounded-lg text-foreground/45 hover:text-red-400 hover:bg-white/5 transition-all duration-150"
             >
               <LogOut size={14} />
             </button>
@@ -1132,7 +1158,8 @@ export function WorkspaceApp() {
       <section className="flex flex-col flex-1 min-w-0 min-h-screen px-7 pt-6 pb-7 gap-0">
 
         {/* Topbar */}
-        <header className="flex items-center justify-between gap-5 pb-5 border-b border-foreground/8 mb-5 flex-shrink-0">
+        <header className="flex items-center justify-between gap-5 pb-5 mb-5 flex-shrink-0"
+                style={{ borderBottom: "1px solid rgba(255,255,255,0.055)" }}>
           <div className="min-w-0">
             <p className="font-mono text-xs text-blue-400 tracking-wider mb-1">
               import {"{ Knowledge }"} from "@you/memory"
@@ -1147,15 +1174,10 @@ export function WorkspaceApp() {
           <div className="flex items-center gap-3">
             {/* View mode segmented control */}
             {activeWorkspaceId && (
-              <div className="flex gap-1.5 border border-foreground/20 bg-secondary p-1"
-                   style={{ boxShadow: "2px 2px 0px rgba(255,255,255,0.08)" }}>
+              <div className="seg-control">
                 {(["editor", "graph", "study"] as const).map((mode) => (
                   <button key={mode} onClick={() => setViewMode(mode)}
-                    className={`px-3 py-1 font-mono text-[0.77rem] transition-all ${
-                      viewMode === mode
-                        ? "bg-purple-500 text-white font-bold"
-                        : "bg-transparent text-foreground/50 hover:text-foreground"
-                    }`}>
+                    className={`seg-btn ${viewMode === mode ? "active" : ""}`}>
                     {mode.charAt(0).toUpperCase() + mode.slice(1)}
                   </button>
                 ))}
@@ -1170,10 +1192,19 @@ export function WorkspaceApp() {
               )}
               <button
                 onClick={() => setCompanionOpen((o) => !o)}
-                className="flex items-center gap-2 min-h-[36px] px-4 border border-foreground/20 bg-secondary
-                           text-foreground/70 text-sm font-semibold hover:text-foreground hover:border-foreground/35
-                           transition-all"
-                style={{ boxShadow: "2px 2px 0px rgba(255,255,255,0.08)" }}
+                className="flex items-center gap-2 min-h-[36px] px-4 rounded-xl
+                           text-sm font-semibold transition-all duration-200
+                           hover:-translate-y-px active:translate-y-0"
+                style={{
+                  background: companionOpen
+                    ? "rgba(240,125,42,0.14)"
+                    : "rgba(255,255,255,0.06)",
+                  border: companionOpen
+                    ? "1px solid rgba(240,125,42,0.3)"
+                    : "1px solid rgba(255,255,255,0.10)",
+                  color: companionOpen ? "hsl(var(--orange))" : "hsl(var(--foreground) / 0.7)",
+                  boxShadow: companionOpen ? "var(--glow-orange)" : "none",
+                }}
               >
                 <MessageSquare size={14} />
                 {companionOpen ? "Hide AI" : "Ask AI"}
@@ -1188,35 +1219,46 @@ export function WorkspaceApp() {
 
           {/* ── MAIN CONTENT ──────────────────────────────────────────────── */}
           {viewMode === "graph" ? (
-            <div className="border border-foreground/12 min-h-[calc(100vh-160px)] overflow-hidden p-2.5"
-                 style={{ background: "rgba(8,8,10,0.7)" }}>
+            <div className="rounded-2xl overflow-hidden min-h-[calc(100vh-160px)] p-2.5"
+                 style={{
+                   background: "rgba(8,8,12,0.7)",
+                   border: "1px solid rgba(255,255,255,0.07)",
+                   boxShadow: "var(--shadow-md)",
+                 }}>
               <KnowledgeGraph nodes={graphData.nodes} edges={graphData.edges} onNodeClick={handleGraphNodeClick} />
             </div>
           ) : viewMode === "study" ? (
             <StudyView accessToken={accessToken!} workspaceId={activeWorkspaceId!} />
           ) : (
-            <div className="border border-foreground/12 min-h-[calc(100vh-160px)] overflow-hidden"
-                 style={{ background: "rgba(8,8,10,0.7)" }}>
+            <div className="rounded-2xl overflow-hidden min-h-[calc(100vh-160px)]"
+                 style={{
+                   background: "rgba(10,10,15,0.65)",
+                   border: "1px solid rgba(255,255,255,0.07)",
+                   backdropFilter: "blur(12px)",
+                   boxShadow: "var(--shadow-md)",
+                 }}>
               {activePage ? (
                 <>
                   {/* Page meta */}
                   <div className="flex items-center justify-between px-5 pt-4">
                     <div className="flex items-center gap-1.5 font-mono text-[0.73rem] text-foreground/30">
                       <span>{activeWorkspace?.name ?? "Space"}</span>
-                      <span className="text-foreground/20">›</span>
+                      <span className="text-foreground/15">›</span>
                       <span>{activeNotebook?.title ?? "Notebook"}</span>
-                      <span className="text-foreground/20">›</span>
+                      <span className="text-foreground/15">›</span>
                       <span>{activeSection?.title ?? "Section"}</span>
-                      <span className="text-foreground/20">›</span>
+                      <span className="text-foreground/15">›</span>
                       <strong className="text-foreground/50 font-medium">{activePage.title}</strong>
                     </div>
                     <button
                       onClick={() => generateFlashcardsMutation.mutate()}
                       disabled={generateFlashcardsMutation.isPending}
-                      className="flex items-center gap-1.5 px-2.5 py-1 font-mono text-[0.73rem] font-bold
-                                 border border-foreground/15 text-foreground/50 hover:border-foreground/30
-                                 hover:text-foreground disabled:opacity-40 transition-all"
-                      style={{ boxShadow: "1.5px 1.5px 0px rgba(255,255,255,0.08)" }}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-mono text-[0.73rem] font-bold
+                                 text-foreground/55 hover:text-foreground disabled:opacity-40 transition-all duration-200"
+                      style={{
+                        background: "rgba(167,139,250,0.08)",
+                        border: "1px solid rgba(167,139,250,0.20)",
+                      }}
                     >
                       <Zap size={10} className="text-purple-400" />
                       {generateFlashcardsMutation.isPending ? "Generating…" : "Generate Study Deck"}
@@ -1228,8 +1270,8 @@ export function WorkspaceApp() {
                     <div className="flex flex-wrap gap-1.5 px-5 mt-2.5">
                       {activePage.tags.map((tag) => (
                         <span key={tag}
-                          className="font-mono text-[0.74rem] border border-foreground/10 px-2 py-0.5 text-foreground/40"
-                          style={{ boxShadow: "1px 1px 0px rgba(255,255,255,0.06)" }}>
+                          className="font-mono text-[0.74rem] rounded-full px-2.5 py-0.5 text-foreground/45"
+                          style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.09)" }}>
                           #{tag}
                         </span>
                       ))}
@@ -1252,25 +1294,29 @@ export function WorkspaceApp() {
 
                   {/* Related notes */}
                   {relatedPages.length > 0 && (
-                    <div className="mt-10 border-t-2 border-dashed border-foreground/10 pt-5 px-5 pb-5">
-                      <h3 className="font-mono text-[0.84rem] lowercase text-foreground/30 mb-3">
-                        // related notes
-                      </h3>
+                    <div className="mt-10 pt-5 px-5 pb-5" style={{ borderTop: "1px dashed rgba(255,255,255,0.08)" }}>
+                      <h3 className="text-[0.84rem] font-semibold text-foreground/30 mb-3 tracking-wider uppercase text-xs">Related Notes</h3>
                       <div className="flex flex-col gap-1.5">
                         {relatedPages.map((relPage) => (
                           <button
                             key={relPage.id}
                             onClick={() => handleNavigateToPage(relPage.id)}
-                            className="flex items-center gap-2 px-3 py-2 border border-foreground/10 bg-foreground/2
+                            className="flex items-center gap-2 px-3 py-2 rounded-xl
                                        text-left font-mono text-[0.81rem] w-full
-                                       hover:border-foreground/25 hover:bg-foreground/4 transition-all"
-                            style={{ boxShadow: "1.5px 1.5px 0px rgba(255,255,255,0.06)" }}
+                                       transition-all duration-150"
+                            style={{
+                              background: "rgba(255,255,255,0.03)",
+                              border: "1px solid rgba(255,255,255,0.07)",
+                            }}
+                            onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.06)")}
+                            onMouseLeave={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.03)")}
                           >
                             <FileText size={11} className="text-purple-400 flex-shrink-0" />
                             <strong className="text-foreground/70">{relPage.title}</strong>
                             <div className="flex gap-1 ml-auto">
                               {relPage.tags.map((t) => (
-                                <span key={t} className="text-[0.65rem] px-1 py-0.5 border border-foreground/10 text-foreground/30">
+                                <span key={t} className="text-[0.65rem] px-1.5 py-0.5 rounded-full text-foreground/30"
+                                      style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}>
                                   #{t}
                                 </span>
                               ))}
@@ -1283,7 +1329,10 @@ export function WorkspaceApp() {
                 </>
               ) : (
                 <div className="flex flex-col items-center justify-center gap-3 min-h-[calc(100vh-220px)] px-8 py-12 text-center">
-                  <Sparkles size={26} className="text-[hsl(var(--orange))] opacity-70" />
+                  <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-2"
+                       style={{ background: "rgba(240,125,42,0.10)", boxShadow: "var(--glow-orange)" }}>
+                    <Sparkles size={26} className="text-[hsl(var(--orange))]" />
+                  </div>
                   <h2 className="font-serif text-[1.55rem] font-bold text-foreground/70 tracking-tight m-0">
                     {hierarchyState}
                   </h2>
@@ -1293,25 +1342,29 @@ export function WorkspaceApp() {
                   <div className="flex flex-wrap justify-center gap-2 mt-2">
                     {workspaces.length === 0 && (
                       <button onClick={() => createWorkspaceMutation.mutate()} disabled={createWorkspaceMutation.isPending}
-                        className="flex items-center gap-1.5 min-h-[33px] px-4 border border-foreground/25 text-[hsl(var(--orange))] text-sm font-semibold hover:bg-foreground/5 transition-all">
+                        className="flex items-center gap-1.5 min-h-[33px] px-4 rounded-xl text-[hsl(var(--orange))] text-sm font-semibold hover:-translate-y-px transition-all duration-200"
+                        style={{ background: "rgba(240,125,42,0.10)", border: "1px solid rgba(240,125,42,0.25)" }}>
                         <Plus size={12} /> Create space
                       </button>
                     )}
                     {activeWorkspaceId && notebooks.length === 0 && (
                       <button onClick={() => createNotebookMutation.mutate()} disabled={createNotebookMutation.isPending}
-                        className="flex items-center gap-1.5 min-h-[33px] px-4 border border-foreground/25 text-[hsl(var(--orange))] text-sm font-semibold hover:bg-foreground/5 transition-all">
+                        className="flex items-center gap-1.5 min-h-[33px] px-4 rounded-xl text-[hsl(var(--orange))] text-sm font-semibold hover:-translate-y-px transition-all duration-200"
+                        style={{ background: "rgba(240,125,42,0.10)", border: "1px solid rgba(240,125,42,0.25)" }}>
                         <Plus size={12} /> Create notebook
                       </button>
                     )}
                     {activeNotebookId && sections.length === 0 && (
                       <button onClick={() => createSectionMutation.mutate()} disabled={createSectionMutation.isPending}
-                        className="flex items-center gap-1.5 min-h-[33px] px-4 border border-foreground/25 text-[hsl(var(--orange))] text-sm font-semibold hover:bg-foreground/5 transition-all">
+                        className="flex items-center gap-1.5 min-h-[33px] px-4 rounded-xl text-[hsl(var(--orange))] text-sm font-semibold hover:-translate-y-px transition-all duration-200"
+                        style={{ background: "rgba(240,125,42,0.10)", border: "1px solid rgba(240,125,42,0.25)" }}>
                         <Plus size={12} /> Create section
                       </button>
                     )}
                     {activeSectionId && pages.length === 0 && (
                       <button onClick={() => createPageMutation.mutate()} disabled={createPageMutation.isPending}
-                        className="flex items-center gap-1.5 min-h-[33px] px-4 border border-foreground/25 text-[hsl(var(--orange))] text-sm font-semibold hover:bg-foreground/5 transition-all">
+                        className="flex items-center gap-1.5 min-h-[33px] px-4 rounded-xl text-[hsl(var(--orange))] text-sm font-semibold hover:-translate-y-px transition-all duration-200"
+                        style={{ background: "rgba(240,125,42,0.10)", border: "1px solid rgba(240,125,42,0.25)" }}>
                         <Plus size={12} /> Create page
                       </button>
                     )}
@@ -1328,28 +1381,32 @@ export function WorkspaceApp() {
                 initial={{ opacity: 0, x: 30 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: 30 }}
-                transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-                className="flex flex-col sticky top-6 border-2 border-foreground overflow-hidden font-sans"
+                transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+                className="flex flex-col sticky top-6 overflow-hidden font-sans"
                 style={{
                   height: "calc(100vh - 148px)",
-                  background: "hsl(var(--card))",
-                  boxShadow: "5px 5px 0px 0px rgba(255,255,255,0.12)",
+                  background: "rgba(10,10,16,0.82)",
+                  border: "1px solid rgba(255,255,255,0.09)",
+                  borderRadius: "1.25rem",
+                  backdropFilter: "blur(28px)",
+                  boxShadow: "var(--shadow-lg)",
                 }}
               >
-                {/* Header — Mac-style code bar */}
-                <div className="flex items-center justify-between p-3 border-b-2 border-foreground bg-secondary flex-shrink-0 font-mono text-xs">
+                {/* Header */}
+                <div className="flex items-center justify-between px-4 py-3 flex-shrink-0 font-mono text-xs"
+                     style={{ borderBottom: "1px solid rgba(255,255,255,0.07)", background: "rgba(255,255,255,0.02)" }}>
                   <div className="flex flex-col gap-0.5">
                     <div className="flex items-center gap-1.5">
                       {/* Mac traffic lights */}
                       <div className="flex gap-1">
-                        <span className="w-2.5 h-2.5 rounded-full bg-red-500 border border-foreground/20" />
-                        <span className="w-2.5 h-2.5 rounded-full bg-yellow-500 border border-foreground/20" />
-                        <span className="w-2.5 h-2.5 rounded-full bg-green-500 border border-foreground/20" />
+                        <span className="w-2.5 h-2.5 rounded-full bg-red-500/80" />
+                        <span className="w-2.5 h-2.5 rounded-full bg-yellow-500/80" />
+                        <span className="w-2.5 h-2.5 rounded-full bg-green-500/80" />
                       </div>
                       <div className="ml-1 flex items-center gap-1 text-foreground font-semibold">
                         <span className="text-blue-400">const</span>
                         <span>companion</span>
-                        <span className="text-foreground/50">=</span>
+                        <span className="text-foreground/40">=</span>
                         <span className="text-gradient-warm font-bold font-sans">AI;</span>
                       </div>
                     </div>
@@ -1371,7 +1428,7 @@ export function WorkspaceApp() {
                     {chatHistory.length > 0 && activeSectionId && (
                       <button
                         onClick={handleSaveChatToPage}
-                        className="w-7 h-7 flex items-center justify-center hover:bg-card border border-transparent hover:border-foreground/20 transition-all text-purple-400 hover:text-purple-300"
+                        className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white/8 transition-all text-purple-400 hover:text-purple-300"
                         title="Export AI conversation as a new note page"
                       >
                         <FilePlus className="w-3.5 h-3.5" />
@@ -1380,7 +1437,7 @@ export function WorkspaceApp() {
                     {chatHistory.length > 0 && (
                       <button
                         onClick={() => setChatHistory([])}
-                        className="w-7 h-7 flex items-center justify-center hover:bg-card border border-transparent hover:border-foreground/20 transition-all text-foreground/60 hover:text-foreground"
+                        className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white/8 transition-all text-foreground/60 hover:text-foreground"
                         title="Clear conversation"
                       >
                         <RotateCcw className="w-3.5 h-3.5" />
@@ -1388,7 +1445,7 @@ export function WorkspaceApp() {
                     )}
                     <button
                       onClick={() => setCompanionOpen(false)}
-                      className="w-7 h-7 flex items-center justify-center hover:bg-card border border-transparent hover:border-foreground/20 transition-all text-foreground/60 hover:text-foreground"
+                      className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white/8 transition-all text-foreground/60 hover:text-foreground"
                     >
                       <X className="w-3.5 h-3.5" />
                     </button>
@@ -1396,17 +1453,21 @@ export function WorkspaceApp() {
                 </div>
 
                 {/* Scope selector */}
-                <div className="grid grid-cols-3 gap-0.5 mx-3 my-2.5 p-0.5 border border-foreground/12 bg-background/40 flex-shrink-0">
+                <div className="grid grid-cols-3 gap-1 mx-3 my-2.5 p-1 rounded-xl flex-shrink-0"
+                     style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}>
                   {(["workspace", "notebook", "page"] as const).map((scope) => (
                     <button
                       key={scope}
                       onClick={() => setChatScope(scope)}
                       disabled={(scope === "notebook" && !activeNotebookId) || (scope === "page" && !activePageId)}
-                      className={`flex items-center justify-center gap-1.5 h-7 text-xs font-semibold transition-all
-                                  ${chatScope === scope
-                                    ? "bg-foreground/10 text-foreground"
-                                    : "bg-transparent text-muted-foreground hover:text-foreground/70"}
+                      className={`flex items-center justify-center gap-1.5 h-7 text-xs font-semibold rounded-lg transition-all duration-200
+                                  ${
+                                    chatScope === scope
+                                      ? "text-foreground"
+                                      : "bg-transparent text-muted-foreground hover:text-foreground/70"
+                                  }
                                   disabled:opacity-30 disabled:cursor-not-allowed`}
+                      style={chatScope === scope ? { background: "rgba(255,255,255,0.10)", boxShadow: "var(--shadow-xs)" } : {}}
                     >
                       {scope === "workspace" && <Layers3 size={10} />}
                       {scope === "notebook" && <BookOpen size={10} />}
@@ -1436,9 +1497,13 @@ export function WorkspaceApp() {
                           transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
                         >
                           {/* Avatar */}
-                          <div className={`w-7 h-7 flex items-center justify-center text-xs flex-shrink-0 border border-foreground
-                                           ${isUser ? "bg-foreground text-background" : "bg-secondary text-foreground"}`}
-                               style={{ boxShadow: "1px 1px 0px rgba(255,255,255,0.1)" }}>
+                          <div className={`w-7 h-7 flex items-center justify-center text-xs flex-shrink-0 rounded-full
+                                           ${isUser
+                                             ? "text-white"
+                                             : "text-foreground"}`}
+                               style={isUser
+                                 ? { background: "var(--gradient-warm)" }
+                                 : { background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)" }}>
                             {isUser ? <User className="w-3.5 h-3.5" /> : <Bot className="w-3.5 h-3.5" />}
                           </div>
 
@@ -1465,10 +1530,16 @@ export function WorkspaceApp() {
                             )}
 
                             {/* Bubble */}
-                            <div className={`px-3.5 py-2.5 border text-sm leading-relaxed
+                            <div className={`px-3.5 py-2.5 text-sm leading-relaxed
                                              ${isUser
-                                               ? "bg-foreground text-background border-foreground rounded-xl rounded-tr-none"
-                                               : "bg-secondary text-foreground border-foreground/15 rounded-xl rounded-tl-none"}`}>
+                                               ? "text-white rounded-2xl rounded-tr-sm"
+                                               : "text-foreground rounded-2xl rounded-tl-sm"}`}
+                                 style={isUser
+                                   ? { background: "var(--gradient-user-bubble)" }
+                                   : {
+                                       background: "rgba(255,255,255,0.06)",
+                                       border: "1px solid rgba(255,255,255,0.09)",
+                                     }}>
                               {isUser
                                 ? msg.content
                                 : <ReactMarkdown className="markdown-prose">{msg.content}</ReactMarkdown>
@@ -1504,14 +1575,15 @@ export function WorkspaceApp() {
                       initial={{ opacity: 0, y: 6 }}
                       animate={{ opacity: 1, y: 0 }}
                     >
-                      <div className="w-7 h-7 bg-secondary border border-foreground flex items-center justify-center text-xs flex-shrink-0"
-                           style={{ boxShadow: "1px 1px 0px rgba(255,255,255,0.1)" }}>
+                      <div className="w-7 h-7 flex items-center justify-center text-xs flex-shrink-0 rounded-full"
+                           style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)" }}>
                         <Bot className="w-3.5 h-3.5" />
                       </div>
-                      <div className="bg-secondary border border-foreground/15 px-4 py-3 rounded-xl rounded-tl-none flex items-center gap-1.5">
-                        <span className="w-1.5 h-1.5 bg-foreground rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-                        <span className="w-1.5 h-1.5 bg-foreground rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
-                        <span className="w-1.5 h-1.5 bg-foreground rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+                      <div className="px-4 py-3 rounded-2xl rounded-tl-sm flex items-center gap-1.5"
+                           style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.09)" }}>
+                        <span className="w-1.5 h-1.5 bg-foreground/60 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+                        <span className="w-1.5 h-1.5 bg-foreground/60 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+                        <span className="w-1.5 h-1.5 bg-foreground/60 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
                       </div>
                     </motion.div>
                   )}
@@ -1520,7 +1592,8 @@ export function WorkspaceApp() {
                 {/* Chat input */}
                 <form
                   onSubmit={(e) => { e.preventDefault(); handleSendChat(); }}
-                  className="p-3 border-t-2 border-foreground bg-secondary/40 flex items-center gap-2 flex-shrink-0"
+                  className="p-3 flex items-center gap-2 flex-shrink-0"
+                  style={{ borderTop: "1px solid rgba(255,255,255,0.07)", background: "rgba(255,255,255,0.02)" }}
                 >
                   <input
                     ref={chatInputRef}
@@ -1530,17 +1603,29 @@ export function WorkspaceApp() {
                     onChange={(e) => setChatInput(e.target.value)}
                     placeholder={`Ask from this ${chatScope}…`}
                     disabled={chatMutation.isPending}
-                    className="flex-1 min-w-0 bg-card border-2 border-foreground px-3 py-2 text-xs
+                    className="flex-1 min-w-0 rounded-xl px-3 py-2 text-xs
                                focus:outline-none font-mono text-foreground placeholder:text-muted-foreground
-                               disabled:opacity-50"
+                               disabled:opacity-50 transition-all duration-200"
+                    style={{
+                      background: "rgba(255,255,255,0.06)",
+                      border: "1px solid rgba(255,255,255,0.09)",
+                    }}
+                    onFocus={(e) => {
+                      e.target.style.borderColor = "rgba(240,125,42,0.40)";
+                      e.target.style.boxShadow = "0 0 0 3px rgba(240,125,42,0.08)";
+                    }}
+                    onBlur={(e) => {
+                      e.target.style.borderColor = "rgba(255,255,255,0.09)";
+                      e.target.style.boxShadow = "none";
+                    }}
                   />
                   <button
                     type="submit"
                     disabled={!chatInput.trim() || chatMutation.isPending}
-                    className="p-2.5 bg-foreground text-background border-2 border-foreground
-                               hover:bg-secondary hover:text-foreground hover:-translate-y-px
-                               active:translate-y-0 disabled:opacity-40 transition-all flex-shrink-0"
-                    style={{ boxShadow: "2px 2px 0px rgba(255,255,255,0.1)" }}
+                    className="p-2.5 rounded-xl text-white
+                               hover:-translate-y-px active:translate-y-0
+                               disabled:opacity-40 transition-all duration-200 flex-shrink-0"
+                    style={{ background: "var(--gradient-warm)", boxShadow: "var(--shadow-sm)" }}
                   >
                     {chatMutation.isPending
                       ? <Loader2 className="w-4 h-4 animate-spin" />
