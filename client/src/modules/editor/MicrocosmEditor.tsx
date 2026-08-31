@@ -358,7 +358,6 @@ export function MicrocosmEditor({
       <div className="flex items-center justify-between gap-3 px-4 py-2.5
                       border-b border-foreground/10 bg-black/20 font-mono text-xs text-foreground/40">
         <div className="flex items-center gap-2.5">
-          <span className="font-mono text-xs text-foreground/25">// page</span>
           {knowledgeStatus && knowledgeStatus !== "not_indexed" && (
             <KnowledgePill status={knowledgeStatus} />
           )}
@@ -378,11 +377,11 @@ export function MicrocosmEditor({
 
           <div className="w-px h-4 bg-foreground/10 flex-shrink-0" />
 
-          {/* Copy markdown */}
+          {/* Copy text */}
           <button
             disabled={!editor || wordCount === 0}
             onClick={handleCopyMarkdown}
-            title="Copy plain text/markdown"
+            title="Copy plain text"
             className="inline-flex items-center gap-1.5 min-h-[26px] px-2.5 border border-foreground/10
                        rounded-none bg-transparent text-foreground/50 text-[11px]
                        hover:border-foreground/25 hover:bg-secondary/50 hover:text-foreground
@@ -391,7 +390,7 @@ export function MicrocosmEditor({
             {isCopied ? (
               <><CheckCircle2 size={11} className="text-emerald-400" /> Copied</>
             ) : (
-              <>Copy text</>
+              <>Copy</>
             )}
           </button>
 
@@ -410,19 +409,6 @@ export function MicrocosmEditor({
             ) : (
               <><ImageIcon size={11} /> Image</>
             )}
-          </button>
-
-          {/* Save now */}
-          <button
-            disabled={!editor || disabled || isSaving || saveState === "saved"}
-            onClick={saveNow}
-            title="Save now"
-            className="inline-flex items-center gap-1.5 min-h-[26px] px-2.5 border border-foreground/10
-                       rounded-none bg-transparent text-foreground/50 text-[11px]
-                       hover:border-foreground/25 hover:bg-secondary/50 hover:text-foreground
-                       disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-          >
-            Save now
           </button>
         </div>
       </div>

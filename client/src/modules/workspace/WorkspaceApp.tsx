@@ -1260,18 +1260,6 @@ export function WorkspaceApp() {
                     </button>
                   </div>
 
-                  {/* Tags */}
-                  {activePage.tags && activePage.tags.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 px-5 mt-2.5">
-                      {activePage.tags.map((tag) => (
-                        <span key={tag}
-                          className="font-mono text-[0.74rem] rounded-full px-2.5 py-0.5 text-foreground/45"
-                          style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.09)" }}>
-                          #{tag}
-                        </span>
-                      ))}
-                    </div>
-                  )}
 
                   <MicrocosmEditor
                     key={activePage.id}
