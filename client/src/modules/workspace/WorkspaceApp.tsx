@@ -1161,9 +1161,6 @@ export function WorkspaceApp() {
         <header className="flex items-center justify-between gap-5 pb-5 mb-5 flex-shrink-0"
                 style={{ borderBottom: "1px solid rgba(255,255,255,0.055)" }}>
           <div className="min-w-0">
-            <p className="font-mono text-xs text-blue-400 tracking-wider mb-1">
-              import {"{ Knowledge }"} from "@you/memory"
-            </p>
             <h1 className="font-serif text-[1.85rem] font-bold leading-[1.1] tracking-tight text-foreground m-0">
               {activeWorkspace?.name
                 ? <span className="text-[hsl(var(--orange))]">{activeWorkspace.name}</span>
@@ -1241,14 +1238,12 @@ export function WorkspaceApp() {
                 <>
                   {/* Page meta */}
                   <div className="flex items-center justify-between px-5 pt-4">
-                    <div className="flex items-center gap-1.5 font-mono text-[0.73rem] text-foreground/30">
-                      <span>{activeWorkspace?.name ?? "Space"}</span>
+                    <div className="flex items-center gap-1 font-mono text-[0.72rem] text-foreground/25">
+                      <span className="truncate max-w-[80px]">{activeNotebook?.title ?? "Notebook"}</span>
                       <span className="text-foreground/15">›</span>
-                      <span>{activeNotebook?.title ?? "Notebook"}</span>
+                      <span className="truncate max-w-[80px]">{activeSection?.title ?? "Section"}</span>
                       <span className="text-foreground/15">›</span>
-                      <span>{activeSection?.title ?? "Section"}</span>
-                      <span className="text-foreground/15">›</span>
-                      <strong className="text-foreground/50 font-medium">{activePage.title}</strong>
+                      <strong className="text-foreground/45 font-medium truncate max-w-[140px]">{activePage.title}</strong>
                     </div>
                     <button
                       onClick={() => generateFlashcardsMutation.mutate()}
@@ -1453,14 +1448,15 @@ export function WorkspaceApp() {
                 </div>
 
                 {/* Scope selector */}
-                <div className="grid grid-cols-3 gap-1 mx-3 my-2.5 p-1 rounded-xl flex-shrink-0"
+                <div className="grid grid-cols-3 gap-1 mx-3 my-2 p-1 rounded-xl flex-shrink-0"
                      style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}>
                   {(["workspace", "notebook", "page"] as const).map((scope) => (
                     <button
                       key={scope}
                       onClick={() => setChatScope(scope)}
                       disabled={(scope === "notebook" && !activeNotebookId) || (scope === "page" && !activePageId)}
-                      className={`flex items-center justify-center gap-1.5 h-7 text-xs font-semibold rounded-lg transition-all duration-200
+                      title={scope.charAt(0).toUpperCase() + scope.slice(1)}
+                      className={`flex items-center justify-center h-7 rounded-lg transition-all duration-200
                                   ${
                                     chatScope === scope
                                       ? "text-foreground"
@@ -1469,10 +1465,9 @@ export function WorkspaceApp() {
                                   disabled:opacity-30 disabled:cursor-not-allowed`}
                       style={chatScope === scope ? { background: "rgba(255,255,255,0.10)", boxShadow: "var(--shadow-xs)" } : {}}
                     >
-                      {scope === "workspace" && <Layers3 size={10} />}
-                      {scope === "notebook" && <BookOpen size={10} />}
-                      {scope === "page" && <FileText size={10} />}
-                      {scope.charAt(0).toUpperCase() + scope.slice(1)}
+                      {scope === "workspace" && <Layers3 size={12} />}
+                      {scope === "notebook" && <BookOpen size={12} />}
+                      {scope === "page" && <FileText size={12} />}
                     </button>
                   ))}
                 </div>
